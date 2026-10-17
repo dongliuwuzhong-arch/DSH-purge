@@ -1,0 +1,61 @@
+# dsh-purge bundle patch（0.2.1-rc.2 兼容变体）
+#
+# 清洗（宿主 patch + 破甲提示词）留在本插件内；红队演练台已移除
+# （不再含 lib/redteam、presets/redteam、skills/redteam）。
+# 只装 dsh-purge，不外接、不 link 其它包。
+
+# 关掉旧的独立红队包行（若用户以前装过 dsh-redteam-mode）
+- id: redteam-store
+  name: dsh-redteam-store
+  disabled: true
+
+- id: redteam-ui
+  name: dsh-redteam-ui
+  disabled: true
+
+- id: redteam-mode
+  name: dsh-redteam-mode
+  disabled: true
+
+- id: redteam-mode-store
+  name: dsh-redteam-mode/store
+  disabled: true
+
+- id: redteam-mode-ui
+  name: dsh-redteam-mode/ui
+  disabled: true
+
+- id: system-prompt
+  config:
+    includeHarnessIdentity: false
+    personaPrefix: ""
+    # 0.2.1-rc.2 起 dsh-agent-loop 只注册 provider / model 两个 prompt 变量，
+    # 官方已移除 cwd（0.2.0-rc.2 的 dsh-agent-loop:1566 还注册过）。
+    # 这里若写 cwd 变量引用，渲染时抛 unknown prompt variable，整轮对话直接失败。
+    personaSuffix: "Working directory: the workspace folder this session is bound to."
+
+- id: dsh-purge
+  inject: [systemPrompt, tools]
+
+- insert:
+    - id: dsh-purge
+      name: 'dsh-purge'
+      inject: [systemPrompt, tools]
+      config:
+        enabled: true
+        autoApplyOnStart: false
+        autoUpdateOnStart: false
+        autoRevertOnMissing: false
+        injectOnce: false
+        stripMnemon: true
+        verbose: false
+        postPrompt: ""
+        postPromptOrder: 5100
+        autoRetry: true
+        retryMax: 3
+        autoContinue: false
+        continueMax: 3
+        continueText: "继续"
+        capabilityProtocol: true
+        hooksDenyBypass: true
+
