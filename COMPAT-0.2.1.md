@@ -2,6 +2,7 @@
 
 **dsh-purge 的 0.2.1-rc.2 兼容变体**
 
+本仓库：https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2 （private）
 上游：[YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge)（MIT，作者已宣布暂停维护）
 本仓库是基于上游 `master`（1.1.71）的**兼容性修复分支**，版本号 `1.1.72`。
 
