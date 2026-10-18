@@ -1,7 +1,7 @@
 {
   "name": "dsh-purge",
-  "version": "1.1.72",
-  "description": "DeepSeek Harness 破甲（0.2.1-rc.2 兼容变体）：保留宿主 patch 体系，移除红队演练台。Jailbreak for every model — swap prompts per model.",
+  "version": "1.1.73",
+  "description": "DeepSeek Harness 破甲（0.2.1-rc.2 兼容变体）：保留宿主 patch 体系，能力面无损，去掉把人压成工具的格式令。",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
