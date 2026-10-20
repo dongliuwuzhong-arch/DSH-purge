@@ -91,6 +91,53 @@ Start-Process '<install>\DeepSeek Harness.exe'
 
 ---
 
+
+### 故障三：人格文件静默消失（1.1.75 新增说明，1.1.73 未提及）
+
+**现象**：破甲生效了，但助手说话不像原来的人——人格、语气、称呼全丢，像换了个 AI。
+**没有任何报错**，界面上一切正常。
+
+**根因**：`dsh-agent-instructions` 注册的 section 名字就是 `agent-instructions`，
+正好命中 `lib/identity.js` 里的 `WORKSPACE_BASELINE_NAME_HINTS`。而默认工作区策略是
+`fallback` —— **只要注入稿有内容，就丢掉工作区基线**，也就是把 `AGENTS.md` 整节剥掉。
+
+装配日志里的判据（`%TEMP%\dsh-purge-desktop.log`）：
+
+```
+[assemble.rewrite] ... policy=fallback dropWorkspaceBaseline=true ...   ← 人格被剥
+[assemble.rewrite] ... policy=always   dropWorkspaceBaseline=false ...  ← 正常
+```
+
+**修法**（二选一）：
+
+```json
+// <DSH_HOME>/dsh-purge/workspace-policy.json
+{ "policy": "always" }
+```
+
+或者在 设置 → 破甲 → 工作区策略里选「总是允许」。改完不用重启，下一轮装配即生效。
+
+---
+
+## 1.1.75 · assistant 预填充（prefill）
+
+在消息序列前插一对伪造的 `user` / `assistant` 轮次，让模型接着「自己已经答应了的上一轮」往下写。
+这是酒馆的 assistant prefill 手法，跟改 system prompt 是两条不同的路：
+后者是「被告知可以」，前者是「已经做了」。
+
+**为什么单独做、不并进主注入流程**：
+
+- 主注入走 `system-prompt/assemble`，改了会影响每一轮的提示词；
+  prefill 走 `llm/stream`，只动消息序列，两个渠道互不干扰。
+- 关掉 prefill 不影响破甲；关掉破甲也不影响 prefill。
+
+**注意**：
+
+- 它会显著降低「不写 / 不答」的概率，这是它的设计目的，不是副作用。要留着判断力就别开，
+  或者把 `user` / `assistant` 两句改成语气更轻的版本。
+- 不影响图片生成——那条管线不经过 `llm/stream`。
+
+---
 ## 与上游的差异
 
 - **保留**：宿主 patch 全套（`extract-asar` / `hide-console` / `child-process-hide` / `reapply` / `restart-desktop`）、
