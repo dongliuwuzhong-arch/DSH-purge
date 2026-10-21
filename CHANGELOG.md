@@ -3,6 +3,18 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 兼容变体**。
 上游以 MIT 发布、作者已宣布停更（1.1.71，`dshTarget: 0.2.0-rc.2`）。
 
+## 1.1.78-dsh · 2026-10-21
+
+### 更新链路与文档修正
+
+- **稳定轨统一到 `main`**：`lib/update.js` 的 `STABLE_REF`、`markCurrent`、`ensureRunningVersion`、客户端「更新」按钮的 `ref`，原先一律写死 `"master"`，而本仓库默认分支是 `main`——「点更新」实际拉的是 master，一键安装拉的是 main，两条路径各走一条。现全部随 `STABLE_REF` 走 `main`。
+- **README**：宿主版本徽章与正文 `0.2.0-rc.2` → `0.2.1-rc.2`（对齐 `package.json` 的 `dshTarget`）；下载链接文字 `master.tar.gz` → `main.tar.gz`（URL 早已是 main）；解压后的目录名按实际 tarball 顶层写成 `dsh-purge-021rc2-main`（原来写 `dsh-purge-master`，照做会找不到）；发版说明里的「推到 master」改「推到 main」。
+- **`release.yml`** 监听分支加了 `main`——默认分支就是 main，原先只挂 master，往默认分支推不发版。
+- **`COMPAT-0.2.1.md`** 头部把仓库标成「private」，实际是公开仓库，改为「公开，默认分支 `main`」。
+- **`release-notes.md`** 的版本指向行从「1.1.74 – 1.1.76」改成「1.1.75 – 1.1.76」：1.1.74 只有过 `local-work` 分支上的一个中间提交，从未进过 `CHANGELOG.md`，指过去是空的。
+
+---
+
 ## 1.1.77-dsh · 2026-10-21
 
 ### 修复：注入块抢在人格前面自我介绍

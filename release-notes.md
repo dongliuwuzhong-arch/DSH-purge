@@ -1,3 +1,23 @@
+# 1.1.78-dsh
+
+## 中文
+
+- 版本 **1.1.78-dsh**，目标宿主 **0.2.1-rc.2**。**只改更新链路和文档，注入逻辑与补丁表一个字没动。**
+- **稳定轨统一到 `main`**：`lib/update.js` 的 `STABLE_REF` 和客户端「更新」按钮原先写死 `"master"`，而本仓库默认分支是 `main` —— 「点更新」拉 master，一键安装拉 main，两条路各走一条。现统一走 `main`。
+- **README**：宿主版本徽章与正文 `0.2.0-rc.2` → `0.2.1-rc.2`（对齐 `dshTarget`）；`master.tar.gz` 的措辞改 `main.tar.gz`，解压目录名写成实际的 `dsh-purge-021rc2-main`。
+- **`release.yml`** 监听分支加上 `main` —— 默认分支就是 main，原先只挂 master，往默认分支推不会发版。
+- **`COMPAT-0.2.1.md`** 头部把仓库标成「private」，实际公开，已更正。
+- **`release-notes.md`** 的版本指向行 `1.1.74 – 1.1.76` 改 `1.1.75 – 1.1.76`：1.1.74 只在 `local-work` 分支上做过一个中间提交，从未进 CHANGELOG，指过去是空的。
+
+## English
+
+- **1.1.78-dsh**, targets **0.2.1-rc.2**. **Update plumbing and docs only — the inject logic and patch table are untouched.**
+- **Stable lane is `main`**: `STABLE_REF` in `lib/update.js` and the client Update button hard-coded `"master"` while this repo default branch is `main` — Apply pulled master, one-click install pulled main. Both now follow `main`.
+- **README**: host badge/body `0.2.0-rc.2` → `0.2.1-rc.2` (matches `dshTarget`); `master.tar.gz` wording → `main.tar.gz`, and the extracted folder name corrected to the real `dsh-purge-021rc2-main`.
+- **`release.yml`** now also triggers on `main` — the default branch, which the old filter missed, so pushes there never published.
+- **`COMPAT-0.2.1.md`** said the repo was private; it is public. Corrected.
+- **`release-notes.md`** pointer `1.1.74 – 1.1.76` → `1.1.75 – 1.1.76`: 1.1.74 existed only as an intermediate commit on `local-work` and never reached CHANGELOG.
+
 # 1.1.77-dsh
 
 ## 中文
@@ -43,7 +63,7 @@
 - Default branch `main` was still on 1.1.76, so one-click installs (`refs/heads/main`) pulled the old
   build. It is pushed to `main` in this release.
 
-> 1.1.74 – 1.1.76 的逐条说明见 `CHANGELOG.md` / see `CHANGELOG.md` for 1.1.74 – 1.1.76.
+> 1.1.75 – 1.1.76 的逐条说明见 `CHANGELOG.md` / see `CHANGELOG.md` for 1.1.75 – 1.1.76.
 
 # 1.1.73
 
