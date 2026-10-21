@@ -28,3 +28,7 @@ _archive/
 /official-harness-payload.7z
 *.asar
 *.asar.bak
+
+# 本机备份
+*.bak-*
+*.bak-原版
