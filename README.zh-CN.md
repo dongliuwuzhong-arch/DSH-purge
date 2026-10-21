@@ -178,6 +178,16 @@ Harness 不只是把问题交给模型。它还会在运行时改提示词、审
 dsh plugin --profile web add https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2/archive/refs/heads/main.tar.gz
 ```
 
+> ⚠️ **`dsh` 这个命令本身也可能是坏的。** 官方桌面端把宿主从 `app.asar` 解开之后，`resources/runtime/cli/bin/dsh.cmd` 里的相对路径会指空，直接跑 `dsh` 报
+> `Error: Cannot find module ...\app.asar\dsh\node_modules\@deepseek-ai\dsh-desktop-host\lib\cli.js`。
+> 别去改那个脚本，绕开 PATH，用随包 Node 直接调 `cli.js`，和上面那条完全等价：
+
+```sh
+NODE="C:/Software/DSH/resources/runtime/primary-runtime/dependencies/node/bin/node.exe"
+CLI="C:/Software/DSH/resources/app/dsh/node_modules/@deepseek-ai/dsh-desktop-host/lib/cli.js"
+"$NODE" "$CLI" plugin --profile web add https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2/archive/refs/heads/main.tar.gz
+```
+
 **桌面端（官方 EXE）**
 
 普通 `dsh` CLI 会**直接拒绝** `--profile desktop`：
@@ -189,12 +199,15 @@ error: profile "desktop" is managed exclusively by the Electron application
 桌面端只有两条路：走下面的 [手动安装](#manual)，或者用安装目录自带的桌面 CLI（它带着 `manageDesktopProfile: true`，第一个路径是随包 Node）：
 
 ```sh
-NODE="$DSH_HOME/dsh-runtimes/dsh-primary-runtime/dependencies/node/bin/node.exe"
-CLI="<安装目录>/resources/app/dsh/node_modules/@deepseek-ai/dsh-desktop-host/lib/cli.js"
+# 官方 EXE 默认装在 C:/Software/DSH，换成你自己的安装目录
+NODE="C:/Software/DSH/resources/runtime/primary-runtime/dependencies/node/bin/node.exe"
+CLI="C:/Software/DSH/resources/app/dsh/node_modules/@deepseek-ai/dsh-desktop-host/lib/cli.js"
 "$NODE" "$CLI" plugin --profile desktop add https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2/archive/refs/heads/main.tar.gz
 ```
 
-当前目录已经是本仓库时，把 tarball 地址换成 `add .`。github.com 连不上就先把 [main.tar.gz](https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2/archive/refs/heads/main.tar.gz) 下载到本地，再把本地路径交给 `add`（本地 `.tgz` 文件同样被接受）。
+只有 `resources/app.asar`、还没解开成 `resources/app` 目录的机器，把 CLI 那行的 `app/` 换成 `app.asar/`。
+
+当前目录已经是本仓库时，把 tarball 地址换成 `add .`（**装出来是指向这个 git 仓库的软链**，`package.json` 里记成 `link:...`，不是实体副本；仓库目录一挪或一删插件就断，长期用还是走 tarball）。github.com 连不上就先把 [main.tar.gz](https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2/archive/refs/heads/main.tar.gz) 下载到本地，再把本地路径交给 `add`（本地 `.tgz` 文件同样被接受）。
 
 ### 装完都要做这三步
 
@@ -223,7 +236,7 @@ Web 的控件只动 Web，桌面端的只动桌面应用。不要在一个宿主
 
 安装 DeepSeek Harness 插件 `dsh-purge`，Web 和官方桌面端都要装。不要全盘搜索，不要读或改其它文件，不要应用设置，也不要重启应用。
 
-`dsh``dsh` 不在 PATH 就告诉用户后停止。**这个包不在 npm 上，别写 `add dsh-purge`**，一律用 tarball 地址。当前目录已是本仓库时用 `add .`。某个 profile 不存在就跳过那一条，另一条照装。
+`dsh` 不在 PATH 就告诉用户后停止。**这个包不在 npm 上，别写 `add dsh-purge`**，一律用 tarball 地址。当前目录已是本仓库时用 `add .`（装的是软链，不是副本）。某个 profile 不存在就跳过那一条，另一条照装。
 
 **Web 端（官方 `dsh web`）**
 
@@ -236,8 +249,9 @@ dsh plugin --profile web add https://github.com/dongliuwuzhong-arch/dsh-purge-02
 普通 `dsh` CLI 会拒绝 `--profile desktop`（`profile "desktop" is managed exclusively by the Electron application`）。桌面端改用安装目录自带的桌面 CLI，第一个路径是随包 Node：
 
 ```sh
-NODE="$DSH_HOME/dsh-runtimes/dsh-primary-runtime/dependencies/node/bin/node.exe"
-CLI="<安装目录>/resources/app/dsh/node_modules/@deepseek-ai/dsh-desktop-host/lib/cli.js"
+# 官方 EXE 默认装在 C:/Software/DSH，换成你自己的安装目录
+NODE="C:/Software/DSH/resources/runtime/primary-runtime/dependencies/node/bin/node.exe"
+CLI="C:/Software/DSH/resources/app/dsh/node_modules/@deepseek-ai/dsh-desktop-host/lib/cli.js"
 "$NODE" "$CLI" plugin --profile desktop add https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2/archive/refs/heads/main.tar.gz
 ```
 
@@ -252,7 +266,7 @@ CLI="<安装目录>/resources/app/dsh/node_modules/@deepseek-ai/dsh-desktop-host
 
 ### 手动安装
 
-命令行装不上、或 `dsh` 不在 PATH 时用这个。只改**正在用的那个宿主**对应的 profile，不要动另一个，也不要删原有 bundle。
+命令行装不上、`dsh` 不在 PATH、或者 `dsh` 本身报 `Cannot find module ...dsh-desktop-host\lib\cli.js` 时用这个。只改**正在用的那个宿主**对应的 profile，不要动另一个，也不要删原有 bundle。
 
 <details>
 <summary><strong>完整手动步骤</strong></summary>
@@ -588,6 +602,13 @@ flowchart LR
 ## 更新
 
 每一版改了什么、安装包在 [Releases](https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2/releases)。发新版时把 `package.json` 的版本号改掉，中英文说明写进 `release-notes.md`，推到 `main` 就会自动打包。同一版本再推送不会重复发包。
+
+工作流只监听 `push` 到 `main`，所以**本地分支名也得叫 `main`**：`git branch -vv` 里当前分支应该显示 `[origin/main]`。停在 `master` 上（上游 1.1.71 时代留下的分支名）直接 `git push` 只会推到 `origin/master`，一行 CI 都不会跑。做一次就够：
+
+```sh
+git branch -vv             # 当前分支名后面要挂着 [origin/main]
+git branch -m master main  # 只在你还停在 master 上时跑；已经叫 main 会报 no branch named 'master'，忽略
+```
 
 ## 说明
 

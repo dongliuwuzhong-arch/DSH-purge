@@ -16,6 +16,7 @@
   },
   "files": [
     "lib",
+    "!lib/*.bak*",
     "bin",
     "docs",
     "scripts",

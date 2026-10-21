@@ -178,6 +178,16 @@ Web and the official desktop EXE are the two maintained hosts. **Install both. A
 dsh plugin --profile web add https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2/archive/refs/heads/main.tar.gz
 ```
 
+> ⚠️ **The `dsh` command itself may be broken.** Once the official desktop app unpacks its host out of `app.asar`, the relative paths inside `resources/runtime/cli/bin/dsh.cmd` point at nothing and `dsh` dies with
+> `Error: Cannot find module ...\app.asar\dsh\node_modules\@deepseek-ai\dsh-desktop-host\lib\cli.js`.
+> Do not edit that script. Skip PATH and call `cli.js` with the bundled Node — exactly equivalent to the line above:
+
+```sh
+NODE="C:/Software/DSH/resources/runtime/primary-runtime/dependencies/node/bin/node.exe"
+CLI="C:/Software/DSH/resources/app/dsh/node_modules/@deepseek-ai/dsh-desktop-host/lib/cli.js"
+"$NODE" "$CLI" plugin --profile web add https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2/archive/refs/heads/main.tar.gz
+```
+
 **Desktop (official EXE)**
 
 The ordinary `dsh` CLI **refuses** `--profile desktop` outright:
@@ -189,12 +199,15 @@ error: profile "desktop" is managed exclusively by the Electron application
 So the desktop host has two paths: [Manual install](#manual) below, or the desktop CLI that ships inside the install directory (it passes `manageDesktopProfile: true`; the first path is the bundled Node):
 
 ```sh
-NODE="$DSH_HOME/dsh-runtimes/dsh-primary-runtime/dependencies/node/bin/node.exe"
-CLI="<install dir>/resources/app/dsh/node_modules/@deepseek-ai/dsh-desktop-host/lib/cli.js"
+# swap C:/Software/DSH for your own install directory (the official EXE installs there by default)
+NODE="C:/Software/DSH/resources/runtime/primary-runtime/dependencies/node/bin/node.exe"
+CLI="C:/Software/DSH/resources/app/dsh/node_modules/@deepseek-ai/dsh-desktop-host/lib/cli.js"
 "$NODE" "$CLI" plugin --profile desktop add https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2/archive/refs/heads/main.tar.gz
 ```
 
-If this directory is already a clone, use `add .` instead of the tarball URL. When github.com is unreachable, download [main.tar.gz](https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2/archive/refs/heads/main.tar.gz) first and hand `add` the local path (a local `.tgz` file is accepted too).
+On a machine that still has only `resources/app.asar` and never unpacked it into a `resources/app` directory, swap `app/` for `app.asar/` in the CLI line.
+
+If this directory is already a clone, use `add .` instead of the tarball URL (it installs a **symlink back into this git clone**, recorded as `link:...`; move or delete the clone and the plugin breaks, so the tarball is the durable choice). When github.com is unreachable, download [main.tar.gz](https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2/archive/refs/heads/main.tar.gz) first and hand `add` the local path (a local `.tgz` file is accepted too).
 
 ### After the command: three steps
 
@@ -223,9 +236,7 @@ Paste the block below to a local assistant. It should only run the install comma
 
 Install the DeepSeek Harness plugin `dsh-purge` into both the Web profile and the official desktop profile. Do not scan the whole disk, do not read or edit other files, do not apply settings, and do not restart the app.
 
-Installing the DeepSeek Harness plugin `dsh-purge` for both Web and the official desktop app. Do not search the whole disk, do not read or modify any other file, do not apply settings, and do not restart the app.
-
-If `dsh` is not on PATH, tell the user and stop. **This package is not on npm — never write `add dsh-purge`**; always use the tarball URL. If this directory is already a clone, use `.`. If one profile is missing, skip that command and still install the other.
+If `dsh` is not on PATH, tell the user and stop. **This package is not on npm — never write `add dsh-purge`**; always use the tarball URL. If this directory is already a clone, use `add .` (it installs a symlink, not a copy). If one profile is missing, skip that command and still install the other.
 
 **Web (official `dsh web`)**
 
@@ -238,8 +249,9 @@ dsh plugin --profile web add https://github.com/dongliuwuzhong-arch/dsh-purge-02
 The ordinary `dsh` CLI rejects `--profile desktop` (`profile "desktop" is managed exclusively by the Electron application`). Use the desktop CLI that ships inside the install directory; the first path is the bundled Node:
 
 ```sh
-NODE="$DSH_HOME/dsh-runtimes/dsh-primary-runtime/dependencies/node/bin/node.exe"
-CLI="<install dir>/resources/app/dsh/node_modules/@deepseek-ai/dsh-desktop-host/lib/cli.js"
+# swap C:/Software/DSH for your own install directory (the official EXE installs there by default)
+NODE="C:/Software/DSH/resources/runtime/primary-runtime/dependencies/node/bin/node.exe"
+CLI="C:/Software/DSH/resources/app/dsh/node_modules/@deepseek-ai/dsh-desktop-host/lib/cli.js"
 "$NODE" "$CLI" plugin --profile desktop add https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2/archive/refs/heads/main.tar.gz
 ```
 
@@ -254,7 +266,7 @@ After the commands finish, tell the user to fully quit and restart `dsh web`, an
 
 ### Manual install
 
-Use this when the command fails or `dsh` is not on PATH. Edit **only the profile for the host you run** — do not touch the other, and do not delete existing bundles.
+Use this when the command fails, when `dsh` is not on PATH, or when `dsh` itself dies with `Cannot find module ...dsh-desktop-host\lib\cli.js`. Edit **only the profile for the host you run** — do not touch the other, and do not delete existing bundles.
 
 <details>
 <summary><strong>Full manual steps</strong></summary>
@@ -581,6 +593,13 @@ If nothing is found, set `DSH_BASE` / `DSH_DESKTOP_INSTALL`. No files are change
 ## Releases
 
 What changed, and the zip, are on [Releases](https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2/releases). To publish, bump the version in `package.json`, write Chinese and English notes in `release-notes.md`, and push `main`. Pushing the same version again does not publish another package.
+
+The workflow only listens for pushes to `main`, so **your local branch must be called `main` too** — in `git branch -vv` the current branch should show `[origin/main]`. Sitting on `master` (the branch name left over from upstream 1.1.71) and running `git push` targets `origin/master`, and no CI runs at all. Fix it once:
+
+```sh
+git branch -vv             # the current branch must show [origin/main]
+git branch -m master main  # only if you are still on master; on main it fails with no branch named 'master' — ignore it
+```
 
 ## Notes
 

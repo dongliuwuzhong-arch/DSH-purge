@@ -304,8 +304,9 @@ error: profile "desktop" is managed exclusively by the Electron application
 不是故障。桌面端走安装目录自带的那个 CLI，它带着这个开关，第一个路径是随包 Node：
 
 ```sh
-NODE="$DSH_HOME/dsh-runtimes/dsh-primary-runtime/dependencies/node/bin/node.exe"
-CLI="<安装目录>/resources/app/dsh/node_modules/@deepseek-ai/dsh-desktop-host/lib/cli.js"
+# 官方 EXE 默认装在 C:/Software/DSH，换成你自己的安装目录
+NODE="C:/Software/DSH/resources/runtime/primary-runtime/dependencies/node/bin/node.exe"
+CLI="C:/Software/DSH/resources/app/dsh/node_modules/@deepseek-ai/dsh-desktop-host/lib/cli.js"
 "$NODE" "$CLI" plugin --profile desktop add https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2/archive/refs/heads/main.tar.gz
 ```
 
