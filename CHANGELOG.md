@@ -36,7 +36,20 @@
 - 宿主里已被 #88 标记过的注入块不会自动重打，**需要点一次「应用」或重启宿主**。
 - 加密槽重新 embed 后 `defaultOverrideHash()` 会变，这是正常的；`installOverride` 会把盘上那份旧默认刷成新的。
 
----
+### 文档与元数据（同批整理）
+
+- **仓库指向全部改到本变体**：`lib/update.js` 的 `REPO` 常量、`client.js` 中英双语
+  `welcome.repo`（两处）、README 徽章 / Releases / 安装命令 / `dsh://` 一键安装按钮，
+  原先都还指着上游 `YuJunZhiXue/dsh-purge`——点「更新」会装回上游，点「一键安装」也装不出本变体。
+- **默认分支改 `main`**：徽章 `blob/master/LICENSE`、`refs/heads/master.tar.gz`、
+  `heads%2Fmaster.tar.gz` 一律换成 `main`。上游用 `master`，本仓库默认分支是 `main`。
+- **`release.yml` 守卫**：`if: github.repository == 'YuJunZhiXue/dsh-purge'` 改为本仓库——
+  原先这条守卫让工作流在本仓库**永远不触发**，等同于死的。
+- **`release-notes.md` 修了两处**：一是首行版本对齐（CI 校验首行必须等于 `# <version>`，
+  原先停在 `# 1.1.73`，守卫一放开就会 exit 1）；二是 1.1.16–1.1.46 的中文条目在上游即已损坏
+  （GBK 字节被按 UTF-8 保存，日文假名成串的乱码），无法还原，已移除并留说明行，英文条目全部保留。
+- **`COMPAT-0.2.1.md` 补上 1.1.76 / 1.1.77 两节**，并把头部版本口径从 `1.1.73` 更新。
+- **`package.json` 的 `files`** 删掉 `presets`、`skills`——1.1.73 移除红队模块后这两个目录已不存在。
 
 ---
 
