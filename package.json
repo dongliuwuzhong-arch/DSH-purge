@@ -1,6 +1,6 @@
 {
   "name": "dsh-purge",
-  "version": "1.1.75-dsh",
+  "version": "1.1.76-dsh",
   "description": "DeepSeek Harness 破甲（0.2.1-rc.2 兼容变体）：保留宿主 patch 体系，能力面无损，去掉把人压成工具的格式令。",
   "type": "module",
   "main": "lib/index.js",
@@ -43,11 +43,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/YuJunZhiXue/dsh-purge.git"
+    "url": "git+https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2.git"
   },
-  "homepage": "https://github.com/YuJunZhiXue/dsh-purge#readme",
+  "homepage": "https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2#readme",
   "bugs": {
-    "url": "https://github.com/YuJunZhiXue/dsh-purge/issues"
+    "url": "https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2/issues"
   },
   "dsh": {
     "bundle": {
@@ -63,11 +63,11 @@
     },
     "install": {
       "preferred": "tarball",
-      "tarball": "https://github.com/YuJunZhiXue/dsh-purge/archive/refs/heads/master.tar.gz",
-      "zip": "https://github.com/YuJunZhiXue/dsh-purge/archive/refs/heads/master.zip",
-      "git": "https://github.com/YuJunZhiXue/dsh-purge.git"
+      "tarball": "https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2/archive/refs/heads/main.tar.gz",
+      "zip": "https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2/archive/refs/heads/main.zip",
+      "git": "https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2.git"
     },
-    "version": "1.1.75-dsh"
+    "version": "1.1.76-dsh"
   },
   "publishConfig": {
     "access": "public"
