@@ -4,7 +4,7 @@
 
 本仓库：https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2 （公开，默认分支 `main`）
 上游：[YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge)（MIT，作者已宣布暂停维护）
-本仓库是基于上游 `master`（1.1.71）的**兼容性修复分支**，当前版本 `1.1.80-dsh`。
+本仓库是基于上游 `master`（1.1.71）的**兼容性修复分支**，当前版本 `1.1.81-dsh`。
 
 ---
 
@@ -211,6 +211,21 @@ README 的宿主版本徽章与正文 `0.2.0-rc.2` → `0.2.1-rc.2`；解压后�
 
 ---
 
+## 1.1.81 · 删掉跨产物比的字节数（2026-10-21）
+
+1.1.80 的三处文档写着「发布包从 1325282 字节降到 1278285 字节」。复查时发现这两个数不是一回事：
+**1325282** 是 GitHub Release 页上 v1.1.79-dsh 那个 **zip** 附件，**1278285** 是本地 `pnpm pack` 的 **tgz**。
+跨压缩格式相减，差出的 48 KB 里混着格式差异，看不出例外规则省了多少；而且 1.1.80 实际发出去的
+zip 是 **1331350** 字节，比 1.1.79 的 1325282 **大** 6068 字节，读者对着 Release 页看会以为文档在瞎写。
+
+**干净对照**（同一份源码，只动 `files` 里一行）：有 `"!lib/*.bak*"` 时 tgz = 1280088 字节，
+删掉该行再 pack = 1359703 字节，差 **79615** 字节，与 `lib/core.js.bak-原版`（338208 字节，压缩后约 79.6 KB）对得上。
+这个数只对 tgz、只对这一版源码成立，没写进文档当卖点。
+
+文档现在只留能自己数的事实：包内 57 个文件、`find -iname '*.bak*'` 为空、`lib/` 从 36 个降到 35 个。
+下载包解开就能核对，不依赖压缩算法、不依赖平台。
+
+---
 ## 1.1.80 · 安装文档八项收尾（2026-10-21）
 
 1.1.79 之后对着真机把八项复查走完，这一版是收尾。**补丁表、注入文案、加密槽一个字没动。**
@@ -255,7 +270,9 @@ git branch -vv    # 应显示 * main <sha> [origin/main]
 
 **五、`pnpm pack` 不再混入 `.bak`**
 
-`package.json` 的 `files` 是白名单，但白名单里的 `lib` 会把整个目录打进去，`.npmignore` 拦不住 `lib/core.js.bak-原版`。补 `"!lib/*.bak*"` 后：包内 57 个文件、`find -iname '*.bak*'` 为空、`lib/` 36 → 35、发布包 **1325282 → 1278285** 字节。
+`package.json` 的 `files` 是白名单，但白名单里的 `lib` 会把整个目录打进去，`.npmignore` 拦不住 `lib/core.js.bak-原版`。补 `"!lib/*.bak*"` 后：包内 57 个文件、`find -iname '*.bak*'` 为空、`lib/` 36 → 35。
+
+这三个数下载包解开就能自己数，不依赖压缩算法和平台；因此不写「发布包小了多少 KB」——`pnpm pack` 的 tgz 与 Release 的 zip 是两种压缩格式，跨格式比字节没有意义。
 
 ---
 ## 1.1.79 · 安装文档与发版链路对齐实际（2026-10-21）
@@ -315,7 +332,7 @@ plugin 子命令里 `if (!manageDesktopProfile) rejectElectronProfile(plugin, op
   破甲提示词注入主链路、client 侧 UI 注入（`client.js` 未改动一个字节）。
 - **移除**：红队演练台（`lib/redteam/`、`presets/redteam/`、`skills/redteam/` 及构建脚本与授权文档）。
   相关调用点已摘除，`isRedteamSession()` 恒返回 false。
-- **版本**：`1.1.71` → `1.1.80-dsh`，`dshTarget` → `0.2.1-rc.2`。
+- **版本**：`1.1.71` → `1.1.81-dsh`，`dshTarget` → `0.2.1-rc.2`。
 
 ---
 
