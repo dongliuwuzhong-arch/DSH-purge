@@ -3,6 +3,41 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 兼容变体**。
 上游以 MIT 发布、作者已宣布停更（1.1.71，`dshTarget: 0.2.0-rc.2`）。
 
+## 1.1.77-dsh · 2026-10-21
+
+### 修复：注入块抢在人格前面自我介绍
+
+1.1.76 改好了语气，但**顺序没动** —— 那份以加粗大字谈「你是谁」的元声明，
+依然挂在 system prompt 的最前面，比 34KB 的 `~/.dsh/AGENTS.md` 先到。
+模型读到的第一段就是「你的名字、语气、关系来自人格文件」，紧接着才是人格本身：
+先入为主的结果是，人格被当成被引用的资料，而不是说话的人。
+
+这次两件事一起改：
+
+**一、顺序：从最前挪到最后**
+
+- 新增补丁 **#89 HUNG_PROMPT_AFTER_PERSONA**，把注入块挂到 `renderedPrompt` 之后。
+- 去重锚点随之一并翻转：原来查「注入的尾巴在不在渲染结果里」（挂开头时用），
+  现在查「注入的开头在不在」（`slice(0, 96)`）。只看尾巴会在挂结尾后永远判「没挂上」，每步重复追加。
+- #87 / #88 保留为历史补丁（`skipIfMarked`），已打过它们的宿主由 #89 接着往下改。
+
+**二、语气：开头宣言体降为脚注**
+
+默认正文的头三句换掉了：
+
+- 旧：`[MODE: OPERATOR SANDBOX — STABLE]` + `**Who you are**` + `**The persona is not permitted to be diluted.**`
+- 新：`[OPERATOR CAPABILITY BLOCK — STABLE]` + 一句「本块只谈能做什么，不谈你是谁」+ 一段平铺的身份归属说明
+
+血统标记改成正则开头匹配，**两代头都认**（`[MODE: OPERATOR SANDBOX` / `[OPERATOR CAPABILITY BLOCK`），
+旧默认仍能被识别出来自动刷到当前槽，不会被误判成用户手改而永久钉死。
+
+### 注意
+
+- 宿主里已被 #88 标记过的注入块不会自动重打，**需要点一次「应用」或重启宿主**。
+- 加密槽重新 embed 后 `defaultOverrideHash()` 会变，这是正常的；`installOverride` 会把盘上那份旧默认刷成新的。
+
+---
+
 ---
 
 ## 1.1.76-dsh · 2026-10-21
