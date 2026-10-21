@@ -4,7 +4,7 @@
 
 <h1 align="center">⚔️ DeepSeek Harness cybersecurity red-team tool (dsh-purge)</h1>
 
-<p align="center"><strong>Version 1.1.78-dsh</strong></p>
+<p align="center"><strong>Version 1.1.79-dsh</strong></p>
 
 <p align="center">
   <em>DeepSeek Harness jailbreak: every model, swap prompts per model. Default prompt for 小码酱. Please star ⭐ If you build on this, see Attribution required.</em>
@@ -21,9 +21,6 @@
   <img src="https://img.shields.io/badge/JavaScript-F7DF1E?logo=javascript&logoColor=000" alt="JavaScript">
 </p>
 
-<p align="center">
-  <a href="https://dsh-plugin.org/plugins/yujunzhixue/dsh-purge"><img src="https://dsh-plugin.org/badges/listed.svg" alt="Listed on dsh-plugin.org"></a>
-</p>
 
 <p align="center">
   <a href="README.md">English</a> | <a href="README.zh-CN.md">中文</a>
@@ -173,27 +170,31 @@ Unmatched patches stay pending or skipped; nothing is rewritten blindly.
 
 Web and the official desktop EXE are the two maintained hosts. **Install both. Apply each separately.** A Web install does not reach the desktop app, and a desktop install does not reach Web.
 
+> ⚠️ **This package is not on npm.** `add dsh-purge` always 404s (neither `registry.npmjs.org/dsh-purge` nor npmmirror has it). There are exactly two ways in: the tarball URL below, or [Manual install](#manual).
+
 **Web (official `dsh web`)**
 
 ```sh
-dsh plugin --profile web add dsh-purge
+dsh plugin --profile web add https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2/archive/refs/heads/main.tar.gz
 ```
 
 **Desktop (official EXE)**
 
-```sh
-dsh plugin --profile desktop add dsh-purge
+The ordinary `dsh` CLI **refuses** `--profile desktop` outright:
+
+```
+error: profile "desktop" is managed exclusively by the Electron application
 ```
 
-If this directory is already a clone, use `add .` instead of the package name. If `dsh` is not on PATH, use [Manual install](#manual). Registry blocked: add `https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2/archive/refs/heads/main.tar.gz` with the same `--profile`.
+So the desktop host has two paths: [Manual install](#manual) below, or the desktop CLI that ships inside the install directory (it passes `manageDesktopProfile: true`; the first path is the bundled Node):
 
-Hub one-click on [dsh-plugin.org](https://dsh-plugin.org/plugins/yujunzhixue/dsh-purge) searches npm for this repository and installs `dsh-purge`. The catalog line may still show `github:` — use the command above if the button falls back to git.
+```sh
+NODE="$DSH_HOME/dsh-runtimes/dsh-primary-runtime/dependencies/node/bin/node.exe"
+CLI="<install dir>/resources/app/dsh/node_modules/@deepseek-ai/dsh-desktop-host/lib/cli.js"
+"$NODE" "$CLI" plugin --profile desktop add https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2/archive/refs/heads/main.tar.gz
+```
 
-For the desktop client you can also click the button (`dsh://` deep link):
-
-<p align="center">
-  <a href="dsh://plugin/install?id=dsh-purge&name=dsh-purge&version=1.1.78-dsh&repo=dongliuwuzhong-arch%2Fdsh-purge-021rc2&permissions=%E7%B3%BB%E7%BB%9F%E6%8F%90%E7%A4%BA%E8%AF%8D%E6%B3%A8%E5%85%A5%2C%E6%9C%AC%E6%9C%BA%E8%A1%A5%E4%B8%81%2C%E8%AE%BE%E7%BD%AE%E9%A1%B5&downloadUrl=https%3A%2F%2Fgithub.com%2Fdongliuwuzhong-arch%2Fdsh-purge-021rc2%2Farchive%2Frefs%2Fheads%2Fmain.tar.gz"><strong>Install in desktop client</strong></a>
-</p>
+If this directory is already a clone, use `add .` instead of the tarball URL. When github.com is unreachable, download [main.tar.gz](https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2/archive/refs/heads/main.tar.gz) first and hand `add` the local path (a local `.tgz` file is accepted too).
 
 ### After the command: three steps
 
@@ -222,20 +223,27 @@ Paste the block below to a local assistant. It should only run the install comma
 
 Install the DeepSeek Harness plugin `dsh-purge` into both the Web profile and the official desktop profile. Do not scan the whole disk, do not read or edit other files, do not apply settings, and do not restart the app.
 
-If `dsh` is not on PATH, tell the user and stop. If this directory is already a clone, use `.` instead of the package name in both commands. If the npm registry is blocked, use `https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2/archive/refs/heads/main.tar.gz`. If one profile is missing, skip that command and still install the other.
+Installing the DeepSeek Harness plugin `dsh-purge` for both Web and the official desktop app. Do not search the whole disk, do not read or modify any other file, do not apply settings, and do not restart the app.
+
+If `dsh` is not on PATH, tell the user and stop. **This package is not on npm — never write `add dsh-purge`**; always use the tarball URL. If this directory is already a clone, use `.`. If one profile is missing, skip that command and still install the other.
 
 **Web (official `dsh web`)**
 
 ```sh
-dsh plugin --profile web add dsh-purge
+dsh plugin --profile web add https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2/archive/refs/heads/main.tar.gz
 ```
 
 **Desktop (official EXE)**
 
+The ordinary `dsh` CLI rejects `--profile desktop` (`profile "desktop" is managed exclusively by the Electron application`). Use the desktop CLI that ships inside the install directory; the first path is the bundled Node:
+
 ```sh
-dsh plugin --profile desktop add dsh-purge
+NODE="$DSH_HOME/dsh-runtimes/dsh-primary-runtime/dependencies/node/bin/node.exe"
+CLI="<install dir>/resources/app/dsh/node_modules/@deepseek-ai/dsh-desktop-host/lib/cli.js"
+"$NODE" "$CLI" plugin --profile desktop add https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2/archive/refs/heads/main.tar.gz
 ```
 
+If neither works, follow the README's Manual install instead of guessing paths.
 After the commands finish, tell the user to fully quit and restart `dsh web`, and to quit the desktop tray then reopen the EXE. On each host, open **dsh-purge** beside the session title and **Apply** on **Clean**. Then stop.
 
 <!-- AI-AGENT-END -->
@@ -387,9 +395,9 @@ On the Clean page, under Prompt. One host per line, then Save list. Steps are in
 
 ## Layout
 
-`bin/` is the CLI, `lib/` is patches and the drill console, `presets/redteam/` is the red-team preset, `skills/redteam/` is the bundled skills, and `client.js` is the dock.
+`bin/` is the CLI, `lib/` is patches and the drill console, `client.js` is the dock, and `docs/` holds the preview images. The red-team preset and bundled skills were removed wholesale in 1.1.73 — the repo has no `presets/`, `skills/`, or `redteam/`.
 
-Runtime files live under `$DSH_HOME`: `prompt-inject.md`, `rules/`, `skills/`, `net-scope-allow.txt`, `redteam/`. If `DSH_HOME` is unset, the launcher-adjacent `.dsh` wins over `~/.dsh`. Web and the desktop app each use their own home. Skills are not part of the inject section and do not replace the prompt.
+Runtime files live under `$DSH_HOME`: `prompt-inject.md`, `rules/`, `skills/`, `net-scope-allow.txt`. If `DSH_HOME` is unset, the launcher-adjacent `.dsh` wins over `~/.dsh`. Web and the desktop app each use their own home. Skills are not part of the inject section and do not replace the prompt.
 
 ---
 
@@ -579,7 +587,7 @@ What changed, and the zip, are on [Releases](https://github.com/dongliuwuzhong-a
 - Scope is rendered copy, defaults, and runtime logic inside local `@deepseek-ai/*` packages, plus override files and rule sets under the harness home.
 - After an upgrade, unmatched originals show as skipped. Apply still completes, and those files are left unchanged.
 - Third-party plugin *source repos* outside `@deepseek-ai` are left alone (CMD silence may **best-effort** patch installed doctor / market / liangshen / mnemon at runtime).
-- Install the npm package `dsh-purge`: `dsh plugin --profile web add dsh-purge` or `dsh plugin --profile desktop add dsh-purge`. From this repo, `add .`. If the registry is blocked, add the main.tar.gz URL instead. Hub one-click uses the same npm package.
+- Install: **there is no `dsh-purge` package on npm** — `add dsh-purge` returns 404. Use the main.tar.gz URL, `add .` from this repo, or Manual install. The ordinary CLI refuses `--profile desktop`; use the desktop CLI that ships in the install directory.
 
 ---
 

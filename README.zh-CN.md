@@ -4,7 +4,7 @@
 
 <h1 align="center">⚔️ DeepSeek Harness 网络安全红队工具（dsh-purge）</h1>
 
-<p align="center"><strong>Version 1.1.78-dsh</strong></p>
+<p align="center"><strong>Version 1.1.79-dsh</strong></p>
 
 <p align="center">
   <em>DeepSeek Harness 破甲：让所有模型都能破甲，不同模型可换不同提示词；默认提示词面向国模「小码酱」。Jailbreak for every model — swap prompts per model. 求 Star 收藏 ⭐ 如要二开，请查看署名要求部分</em>
@@ -21,9 +21,6 @@
   <img src="https://img.shields.io/badge/JavaScript-F7DF1E?logo=javascript&logoColor=000" alt="JavaScript">
 </p>
 
-<p align="center">
-  <a href="https://dsh-plugin.org/plugins/yujunzhixue/dsh-purge"><img src="https://dsh-plugin.org/badges/listed.svg" alt="Listed on dsh-plugin.org"></a>
-</p>
 
 <p align="center">
   <a href="README.md">English</a> | <a href="README.zh-CN.md">中文</a>
@@ -171,29 +168,33 @@ Harness 不只是把问题交给模型。它还会在运行时改提示词、审
 
 ## 安装
 
-现在只维护官方 `dsh web` 和官方桌面 EXE，**两边都要装、分开应用**。Web 的包进不了桌面端，桌面端的包也进不了 Web。
+只维护官方 `dsh web` 和官方桌面 EXE，**两边都要装、分开应用**。Web 的包进不了桌面端，桌面端的包也进不了 Web。
+
+> ⚠️ **这个包不在 npm 上。** `add dsh-purge` 一定 404（`registry.npmjs.org/dsh-purge` 与 npmmirror 上都查不到）。装包只有两条路：下面的 tarball 地址，或者 [手动安装](#manual)。
 
 **Web（官方 `dsh web`）**
 
 ```sh
-dsh plugin --profile web add dsh-purge
+dsh plugin --profile web add https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2/archive/refs/heads/main.tar.gz
 ```
 
 **桌面端（官方 EXE）**
 
-```sh
-dsh plugin --profile desktop add dsh-purge
+普通 `dsh` CLI 会**直接拒绝** `--profile desktop`：
+
+```
+error: profile "desktop" is managed exclusively by the Electron application
 ```
 
-当前目录已经是本仓库时，把包名换成 `add .`。`dsh` 不在 PATH 时走 [手动安装](#manual)。registry 上不去：同一个 `--profile`，把目标换成 `https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2/archive/refs/heads/main.tar.gz`。
+桌面端只有两条路：走下面的 [手动安装](#manual)，或者用安装目录自带的桌面 CLI（它带着 `manageDesktopProfile: true`，第一个路径是随包 Node）：
 
-[插件市场](https://dsh-plugin.org/plugins/yujunzhixue/dsh-purge) 一键安装会按本仓库反查 npm，命中后装 `dsh-purge`。目录页可能仍写 `github:` —— 按钮若退回 git，用上表命令。
+```sh
+NODE="$DSH_HOME/dsh-runtimes/dsh-primary-runtime/dependencies/node/bin/node.exe"
+CLI="<安装目录>/resources/app/dsh/node_modules/@deepseek-ai/dsh-desktop-host/lib/cli.js"
+"$NODE" "$CLI" plugin --profile desktop add https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2/archive/refs/heads/main.tar.gz
+```
 
-桌面客户端也可以点按钮（`dsh://` 唤起）：
-
-<p align="center">
-  <a href="dsh://plugin/install?id=dsh-purge&name=dsh-purge&version=1.1.78-dsh&repo=dongliuwuzhong-arch%2Fdsh-purge-021rc2&permissions=%E7%B3%BB%E7%BB%9F%E6%8F%90%E7%A4%BA%E8%AF%8D%E6%B3%A8%E5%85%A5%2C%E6%9C%AC%E6%9C%BA%E8%A1%A5%E4%B8%81%2C%E8%AE%BE%E7%BD%AE%E9%A1%B5&downloadUrl=https%3A%2F%2Fgithub.com%2Fdongliuwuzhong-arch%2Fdsh-purge-021rc2%2Farchive%2Frefs%2Fheads%2Fmain.tar.gz"><strong>唤起客户端一键安装</strong></a>
-</p>
+当前目录已经是本仓库时，把 tarball 地址换成 `add .`。github.com 连不上就先把 [main.tar.gz](https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2/archive/refs/heads/main.tar.gz) 下载到本地，再把本地路径交给 `add`（本地 `.tgz` 文件同样被接受）。
 
 ### 装完都要做这三步
 
@@ -222,20 +223,25 @@ Web 的控件只动 Web，桌面端的只动桌面应用。不要在一个宿主
 
 安装 DeepSeek Harness 插件 `dsh-purge`，Web 和官方桌面端都要装。不要全盘搜索，不要读或改其它文件，不要应用设置，也不要重启应用。
 
-`dsh` 不在 PATH 就告诉用户后停止。当前目录已是本仓库时，把下面两条里的包名都换成 `.`。npm registry 上不去，把包名换成 `https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2/archive/refs/heads/main.tar.gz`。某个 profile 不存在就跳过那一条，另一条照装。
+`dsh``dsh` 不在 PATH 就告诉用户后停止。**这个包不在 npm 上，别写 `add dsh-purge`**，一律用 tarball 地址。当前目录已是本仓库时用 `add .`。某个 profile 不存在就跳过那一条，另一条照装。
 
 **Web 端（官方 `dsh web`）**
 
 ```sh
-dsh plugin --profile web add dsh-purge
+dsh plugin --profile web add https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2/archive/refs/heads/main.tar.gz
 ```
 
 **桌面端（官方 EXE）**
 
+普通 `dsh` CLI 会拒绝 `--profile desktop`（`profile "desktop" is managed exclusively by the Electron application`）。桌面端改用安装目录自带的桌面 CLI，第一个路径是随包 Node：
+
 ```sh
-dsh plugin --profile desktop add dsh-purge
+NODE="$DSH_HOME/dsh-runtimes/dsh-primary-runtime/dependencies/node/bin/node.exe"
+CLI="<安装目录>/resources/app/dsh/node_modules/@deepseek-ai/dsh-desktop-host/lib/cli.js"
+"$NODE" "$CLI" plugin --profile desktop add https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2/archive/refs/heads/main.tar.gz
 ```
 
+两条都装不上就照 README 的「手动安装」走，别自己猜路径。
 命令结束后，提醒用户：Web 完全退出并重启 `dsh web`；桌面端退出托盘再打开 EXE。各自点会话标题旁的 **dsh-purge**，在「清洗」里点「应用」。然后停止。
 
 <!-- AI-AGENT-END -->
@@ -393,9 +399,9 @@ dsh-purge --uninstall
 
 ## 目录结构
 
-`bin/` 是命令行，`lib/` 是补丁和演练台，`presets/redteam/` 是红队预设，`skills/redteam/` 是随包技能，`client.js` 是侧栏。
+`bin/` 是命令行，`lib/` 是补丁和演练台，`client.js` 是侧栏，`docs/` 是预览图。红队预设与随包技能在 1.1.73 已整块移除，仓库里没有 `presets/`、`skills/`、`redteam/`。
 
-运行时文件在 `$DSH_HOME`：`prompt-inject.md`、`rules/`、`skills/`、`net-scope-allow.txt`、`redteam/`。未设 `DSH_HOME` 时，优先用 dsh 安装目录旁边的 `.dsh`，再退回 `~/.dsh`。Web 和桌面端各用自己那一份主目录。Skill 不进注入段，也不顶替提示词。
+运行时文件在 `$DSH_HOME`：`prompt-inject.md`、`rules/`、`skills/`、`net-scope-allow.txt`。未设 `DSH_HOME` 时，优先用 dsh 安装目录旁边的 `.dsh`，再退回 `~/.dsh`。Web 和桌面端各用自己那一份主目录。Skill 不进注入段，也不顶替提示词。
 
 ---
 
@@ -588,7 +594,7 @@ flowchart LR
 - 改动范围是本机 `@deepseek-ai/*` 包里的渲染文案、默认策略和执行逻辑，以及用户目录下的覆盖文件与规则集。
 - 升级后原文对不上会显示跳过，这次应用仍算完成，不会乱改。
 - 不改动非 `@deepseek-ai` 的第三方插件源仓库（启动时的 CMD 无感会**尽力**修补已装的 doctor / market / 梁神 / mnemon，属运行时补丁）。
-- 安装走 npm 包名 `dsh-purge`：`dsh plugin --profile web add dsh-purge` 或 `dsh plugin --profile desktop add dsh-purge`。当前目录已是本仓库时 `add .`。registry 上不去再加 main.tar.gz。插件市场一键安装走同一个 npm 包。
+- 安装：**npm 上没有 `dsh-purge` 这个包**，`add dsh-purge` 会 404。用 main.tar.gz 的 URL、当前目录 `add .`，或走手动安装。桌面端的 `--profile desktop` 被普通 CLI 拒绝（`profile "desktop" is managed exclusively by the Electron application`），要用安装目录自带的桌面 CLI。
 
 ---
 

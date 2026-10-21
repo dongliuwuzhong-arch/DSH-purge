@@ -1,3 +1,6 @@
+# package.json 的 files 是白名单，这个文件只在白名单之外兜底。
+# 实测（pnpm pack）：files 里的 "lib" 会把整个目录打进去，
+# 所以下面这条拦不住 lib/default-prompt-inject.md —— 它是加密槽的源稿，
+# 明文在包里不影响运行（运行时只读 asset-table.js 里的密封槽）。
 lib/default-prompt-inject.md
-default-prompt-inject.md
 频道推广手册/

@@ -1,5 +1,30 @@
-# 1.1.78-dsh
+# 1.1.79-dsh
 
+## 中文
+
+- 版本 **1.1.79-dsh**，目标宿主 **0.2.1-rc.2**。**补丁表、注入文案、加密槽一个字没动**，只修安装与发版链路。
+- **安装文档三条路全部重写**：原先写的三条按字面走**没有一条能通** ——
+  ① npm 上根本没有 `dsh-purge`（`registry.npmjs.org/dsh-purge` 与 npmmirror 都 404），`add dsh-purge` 必然失败；
+  ② 普通 `dsh` CLI 直接拒绝 `--profile desktop`（`profile "desktop" is managed exclusively by the Electron application`）；
+  ③ `dsh://plugin/install` 深链在宿主里没有消费者，`open-url` 只认 `dsh://open`，那个按钮点了没反应。
+- **桌面端给出可跑通的三段式**：随包 Node + `dsh-desktop-host/lib/cli.js` + `plugin --profile desktop add <tarball>`。
+  这条带 `manageDesktopProfile: true`，实测能列出已装版本。README 里贴了宿主原文报错，免得用户以为是自己弄错。
+- **`lib/update.js` 的 `COPY_NAMES` 补 `CHANGELOG.md` / `COMPAT-0.2.1.md`** —— 原先「点更新」只搬代码和 README，这两个文档永远停在旧版。
+- **`release.yml`**：监听分支只留 `main`；语法门禁补 `node --check client.js`；仓库守卫从上游 `YuJunZhiXue/dsh-purge` 改成 `dongliuwuzhong-arch/dsh-purge-021rc2`（原先在本仓库永不触发）。
+- **删文档噪音**：`presets/redteam/`、`skills/redteam/`（1.1.73 已整块移除的幽灵目录）、`dsh-plugin.org` 的 Hub 徽章与市场页推荐。
+- **`COMPAT-0.2.1.md`** 补 1.1.78 / 1.1.79 两节，并新增「发版流程（CI）」一节，写清 `release-notes.md` 第一行必须等于 `# <version>` 这条硬门槛。
+
+## English
+
+- **1.1.79-dsh**, targeting host **0.2.1-rc.2**. The patch table, the injected prompt, and the sealed slot are untouched — this release only fixes install and release plumbing.
+- **All three documented install paths were broken as written.** (1) `dsh-purge` is not on npm at all — both `registry.npmjs.org/dsh-purge` and npmmirror return 404, so `add dsh-purge` can never work. (2) The ordinary `dsh` CLI refuses `--profile desktop` outright: `profile "desktop" is managed exclusively by the Electron application`. (3) `dsh://plugin/install` has no consumer in the host — `open-url` only handles `dsh://open`, so the one-click button did nothing.
+- **The desktop host now gets a working three-part command**: the bundled Node, `dsh-desktop-host/lib/cli.js`, and `plugin --profile desktop add <tarball>`. That entry passes `manageDesktopProfile: true` and was verified to list the installed version. The README quotes the host's own error so nobody blames their setup.
+- **`lib/update.js` `COPY_NAMES` now includes `CHANGELOG.md` and `COMPAT-0.2.1.md`** — the in-app update used to carry code and README only, leaving both documents permanently stale.
+- **`release.yml`**: listens on `main` only, syntax gate adds `node --check client.js`, and the repository guard moves from upstream `YuJunZhiXue/dsh-purge` to `dongliuwuzhong-arch/dsh-purge-021rc2` — the old guard meant the workflow could never fire in this repo.
+- **Doc noise removed**: the `presets/redteam/` and `skills/redteam/` ghost directories (removed wholesale back in 1.1.73), plus the `dsh-plugin.org` Hub badge and marketplace recommendation.
+- **`COMPAT-0.2.1.md`** gains 1.1.78 and 1.1.79 sections and a new "Release pipeline (CI)" section documenting the hard `release-notes.md` first-line rule.
+
+# 1.1.78-dsh
 ## 中文
 
 - 版本 **1.1.78-dsh**，目标宿主 **0.2.1-rc.2**。**只改更新链路和文档，注入逻辑与补丁表一个字没动。**

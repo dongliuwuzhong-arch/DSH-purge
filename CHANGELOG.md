@@ -3,6 +3,30 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 兼容变体**。
 上游以 MIT 发布、作者已宣布停更（1.1.71，`dshTarget: 0.2.0-rc.2`）。
 
+## 1.1.79-dsh · 2026-10-21
+
+### 安装与发版链路对齐真机
+
+对着实际网络与宿主重跑了一遍安装链路，文档里写的三条路**一条都走不通**：
+
+- **npm 上没有这个包**：`registry.npmjs.org/dsh-purge` 与 `registry.npmmirror.com/dsh-purge` 都是 **404**。README 原先主推的 `dsh plugin --profile web add dsh-purge` 必然失败。本机能用是因为 profile 里写的是 `file:../../plugins/dsh-purge`，与 registry 无关。→ 文档只留 tarball 与本地路径两条路，并明写这句会 404。
+- **`--profile desktop` 被普通 CLI 硬拒**：`error: profile "desktop" is managed exclusively by the Electron application`。根因在 `@deepseek-ai/dsh/lib/bin.js` 的 `rejectElectronProfile()`，只有传了 `manageDesktopProfile: true` 的调用方（`dsh-desktop-host/lib/cli.js` 的 `runDesktopCli()`）能过。→ README 给出「随包 Node + cli.js + `plugin --profile desktop add <tarball>`」三段式，实测能列出已装版本。
+- **`dsh://plugin/install` 深链没有消费者**：`resources/app/lib/main.js` 的 `open-url` 只认 `dsh://open` 与 `dsh://open/`，全仓 grep `plugin/install` 零命中。→ 删掉那个按钮。
+
+### 代码与 CI
+
+- `lib/update.js` 的 `COPY_NAMES` 补 `CHANGELOG.md`、`COMPAT-0.2.1.md` —— 原先「点更新」只搬 `lib`/`bin`/`docs`/`client.js`/`package.json`/两个 README/`LICENSE`，这两份文档永远停在旧版。
+- `.github/workflows/release.yml`：监听分支只留 `main`（`master` 已与 `main` 同步，留着会重复触发）；语法门禁补 `node --check client.js`；仓库守卫从上游 `YuJunZhiXue/dsh-purge` 改成 `dongliuwuzhong-arch/dsh-purge-021rc2`（原先在本仓库**永远不会触发**）。
+
+### 文档
+
+- README 中英两份：删掉 `presets/redteam/`、`skills/redteam/` 两个 1.1.73 已整块移除的幽灵目录，明写「仓库里没有 `presets/`、`skills/`、`redteam/`」；删掉 `dsh-plugin.org` 的 Hub 徽章与市场页推荐。
+- `COMPAT-0.2.1.md` 补 `1.1.78 · 稳定轨统一到 main`、`1.1.79 · 安装文档与发版链路对齐实际` 两节，新增「发版流程（CI）」一节，写清 `release-notes.md` 第一行必须等于 `# <version>`（不一致 workflow 直接 `exit 1`）。
+
+**补丁表 83 条、注入文案、加密槽 `defaultOverrideHash()` = `f94ed4ef…` 全部未变。**
+
+---
+
 ## 1.1.78-dsh · 2026-10-21
 
 ### 更新链路与文档修正

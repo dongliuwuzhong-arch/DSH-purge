@@ -4,7 +4,7 @@
 
 本仓库：https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2 （公开，默认分支 `main`）
 上游：[YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge)（MIT，作者已宣布暂停维护）
-本仓库是基于上游 `master`（1.1.71）的**兼容性修复分支**，当前版本 `1.1.77-dsh`。
+本仓库是基于上游 `master`（1.1.71）的**兼容性修复分支**，当前版本 `1.1.79-dsh`。
 
 ---
 
@@ -200,14 +200,75 @@ This file has no opinion about how you sound.
 **升级注意**：宿主里已被 #88 标记过的注入块不会自动重打，**需要点一次「应用」或重启宿主**。
 加密槽重新 embed 后 `defaultOverrideHash()` 会变，这是正常的。
 
+## 1.1.78 · 稳定轨统一到 `main`（2026-10-21）
+
+本仓库的默认分支是 `main`，但 `lib/update.js` 的 `STABLE_REF` 和客户端「更新」按钮里写死的是 `"master"`。
+结果是一键安装拉 `main`、点「更新」拉 `master`，两条路各走一条。现全部随 `STABLE_REF` 走 `main`。
+
+同批修正：`release.yml` 的监听分支补上 `main`（原先只挂 `master`，往默认分支推根本不发版）；
+README 的宿主版本徽章与正文 `0.2.0-rc.2` → `0.2.1-rc.2`；解压后的目录名按 tarball 实际顶层写成
+`dsh-purge-021rc2-main`（原来写 `dsh-purge-master`，照做会找不到）。
+
 ---
+
+## 1.1.79 · 安装文档与发版链路对齐实际（2026-10-21）
+
+1.1.78 之后对着真机重跑了一遍安装链路，发现文档写的三条路**没有一条能按字面走通**：
+
+**一、npm 上没有这个包**
+
+`registry.npmjs.org/dsh-purge` 与 `registry.npmmirror.com/dsh-purge` **都返回 404**
+（搜索接口里能搜到的 `dsh-session-purge` / `dsh-plugin-session-purge` 是别人的包）。
+README 原先主推的 `dsh plugin --profile web add dsh-purge` 必然失败。
+本机能跑，是因为 profile 的 `package.json` 里写的是 `file:../../plugins/dsh-purge`，跟 registry 无关。
+
+→ 文档改成只给 tarball 地址与本地路径两条路，并明写「`add dsh-purge` 会 404」。
+
+**二、`--profile desktop` 被普通 CLI 硬拒**
+
+```
+error: profile "desktop" is managed exclusively by the Electron application
+```
+
+根因在 `@deepseek-ai/dsh/lib/bin.js`：`parseDshArgs(argv, version, manageDesktopProfile = false)`，
+plugin 子命令里 `if (!manageDesktopProfile) rejectElectronProfile(plugin, options.profile);`，
+而 `rejectElectronProfile` 只拒 `"desktop"` 这一个 profile。全仓只有
+`@deepseek-ai/dsh-desktop-host/lib/cli.js` 的 `runDesktopCli()` 传了 `manageDesktopProfile: true`。
+
+→ 文档给出桌面端的三段式：随包 Node + 那个 `cli.js` + `plugin --profile desktop add <tarball>`。实测可跑通（`why dsh-purge` 能列出已装版本）。
+
+**三、`dsh://plugin/install` 深链没有消费者**
+
+`resources/app/lib/main.js` 里 `app.on("open-url", ...)` 只认 `dsh://open` 与 `dsh://open/`，
+全仓 grep `plugin/install` 零命中。README 里那个「唤起客户端一键安装」按钮点了没反应。
+→ 整块按钮删掉。
+
+**同批清掉的其它文档噪音**：
+
+- 删掉 `presets/redteam/`、`skills/redteam/` 这类 1.1.73 已整块移除的幽灵目录，
+  并明写「仓库里没有 `presets/`、`skills/`、`redteam/`」。
+- 删掉 `dsh-plugin.org` 的 Hub 徽章与市场页推荐（那里装出来的不是本变体）。
+- `lib/update.js` 的 `COPY_NAMES` 补 `CHANGELOG.md` / `COMPAT-0.2.1.md`
+  —— 原先「点更新」只搬代码和 README，这两个文档停在旧版。
+- `release.yml` 的语法门禁补 `node --check client.js`；监听分支只留 `main`。
+- `.github/workflows/release.yml` 的仓库守卫从上游 `YuJunZhiXue/dsh-purge` 改成
+  `dongliuwuzhong-arch/dsh-purge-021rc2` —— 原先这个 workflow 在本仓库**永远不会触发**。
+- 本文件新增「发版流程（CI）」一节，写清 `release-notes.md` 第一行必须等于 `# <version>`
+  这条硬门槛（不一致 CI 直接 `exit 1`）。
+- 清理 `release-notes.md` 里 1.1.16 – 1.1.46 的中文条目：上游仓库里那些段落的正文
+  是 GBK 字节被按 UTF-8 存的，已不可逆，英文条目全部保留。
+
+**能力条款、补丁表、注入文案一个字没动。**
+
+---
+
 ## 与上游的差异
 
 - **保留**：宿主 patch 全套（`extract-asar` / `hide-console` / `child-process-hide` / `reapply` / `restart-desktop`）、
   破甲提示词注入主链路、client 侧 UI 注入（`client.js` 未改动一个字节）。
 - **移除**：红队演练台（`lib/redteam/`、`presets/redteam/`、`skills/redteam/` 及构建脚本与授权文档）。
   相关调用点已摘除，`isRedteamSession()` 恒返回 false。
-- **版本**：`1.1.71` → `1.1.77-dsh`，`dshTarget` → `0.2.1-rc.2`。
+- **版本**：`1.1.71` → `1.1.79-dsh`，`dshTarget` → `0.2.1-rc.2`。
 
 ---
 
@@ -222,12 +283,56 @@ This file has no opinion about how you sound.
 
 ## 安装
 
-```powershell
-dsh plugin --profile desktop add <path-to-this-repo>
+**这个包不在 npm 上** —— `add dsh-purge` 一律 404（npmjs 与 npmmirror 两处都查不到）。
+只能走 tarball 或本地路径：
+
+**Web（官方 `dsh web`）**
+
+```sh
+dsh plugin --profile web add https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2/archive/refs/heads/main.tar.gz
 ```
 
-> 桌面端 profile 由 Electron 独占管理，`dsh --profile desktop --dump-config` 会被宿主设计性拒绝
-> （`profile "desktop" is managed exclusively by the Electron application`），这是预期行为，不是故障。
+**桌面端（官方 EXE）**
+
+普通 `dsh` CLI 会直接拒绝 `--profile desktop`：
+
+```
+error: profile "desktop" is managed exclusively by the Electron application
+```
+
+这是宿主的设计性行为（`@deepseek-ai/dsh/lib/bin.js` 里 `rejectElectronProfile` 只放行 `manageDesktopProfile: true` 的调用方），
+不是故障。桌面端走安装目录自带的那个 CLI，它带着这个开关，第一个路径是随包 Node：
+
+```sh
+NODE="$DSH_HOME/dsh-runtimes/dsh-primary-runtime/dependencies/node/bin/node.exe"
+CLI="<安装目录>/resources/app/dsh/node_modules/@deepseek-ai/dsh-desktop-host/lib/cli.js"
+"$NODE" "$CLI" plugin --profile desktop add https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2/archive/refs/heads/main.tar.gz
+```
+
+装完必须**退出重开**那个宿主，再在 dsh-purge 面板的「清洗」页点一次「应用」，补丁才会进当前进程。
+
+---
+
+## 发版流程（CI）
+
+`.github/workflows/release.yml` 只在 **`main`** 分支的 push 上触发，由 GitHub Action 建 tag 和 Release：
+
+1. 改 `package.json` 的 `version` 与 `dsh.version`（两处必须一致，都是 `1.1.xx-dsh`）。
+2. **`release-notes.md` 第一行必须正好是 `# <version>`** —— workflow 第 43-47 行会比对，
+   不一致直接 `exit 1`，不发版。这是最容易踩的一条。
+3. `git tag` 可以不打；不打时 workflow 用 `HEAD` 建 `v<version>` tag 并上传
+   `dsh-purge-<version>.zip`。
+4. 版本号里带 `beta` / `alpha` / `rc` 会发成 prerelease。
+5. 语法门禁在 workflow 第 24-30 行：`node --check` 跑 `lib/index.js` / `lib/core.js` /
+   `lib/reapply.js` / `client.js`，再 `import './lib/index.js'` 验一遍模块能加载。
+
+手动核对发版是否成功：
+
+```sh
+curl -sL https://api.github.com/repos/dongliuwuzhong-arch/dsh-purge-021rc2/releases/latest
+```
+
+看 `tag_name` 与 `assets[0].size`。GitHub Actions 里 `Release` 这条 run 是 success、Release 状态是 published，才算走完。
 
 ---
 
