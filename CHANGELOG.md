@@ -3,6 +3,36 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 兼容变体**。
 上游以 MIT 发布、作者已宣布停更（1.1.71，`dshTarget: 0.2.0-rc.2`）。
 
+## 1.1.81-dsh · 2026-10-21
+
+### 删掉一处跨产物比的字节数
+
+1.1.80 的三处文档写着「发布包从 1325282 字节降到 1278285 字节」。这两个数不是一回事：
+
+- **1325282** 是 GitHub Release 页上 v1.1.79-dsh 那个 **zip** 附件的大小；
+- **1278285** 是本地 `pnpm pack` 出来的 **tgz**。
+
+zip 与 tgz 是两种压缩格式，拿它们相减，差出来的 48 KB 里混着格式差异，看不出 `"!lib/*.bak*"` 到底省了多少。更麻烦的是**方向也反了**：1.1.80 实际发出去的 zip 是 **1331350** 字节，比 1.1.79 的 1325282 **大** 6068 字节（因为多了 1.1.80 自己的文档与 CHANGELOG），读者拿着 Release 页的数字对照文档，会以为文档在瞎写。
+
+**干净对照**（本轮实跑，同一份 1.1.81 源码，只动 `files` 里一行）：
+
+| 条件 | 产物 | 字节 |
+| --- | --- | --- |
+| 有 `"!lib/*.bak*"` | tgz | 1280088 |
+| 删掉该行 | tgz | 1359703 |
+| 差值 | | **79615** |
+
+79615 字节与 `lib/core.js.bak-原版`（338208 字节，压缩后约 79.6 KB）对得上，这才是例外规则的真实效果。这个数只对 tgz、只对这一版源码成立，没写进文档当卖点。
+
+**现在的口径**：只留能自己数的事实 —— 包内 57 个文件、`find -iname '*.bak*'` 为空、`lib/` 从 36 个降到 35 个。下载包解开就能核对，不依赖压缩算法、不依赖平台。
+
+### 验证
+
+- `node --check lib/index.js lib/core.js lib/reapply.js client.js bin/dsh-purge.js` 全过，`node --input-type=module -e "import './lib/index.js'"` 打印 `import OK`。
+- 1.1.80 那三处跨产物对比已删；仓库里再出现这两个数字，只在 1.1.81 讲这个问题本身的段落里。
+- 三份文档代码围栏仍为偶数，无单行奇数反引号。
+
+---
 ## 1.1.80-dsh · 2026-10-21
 
 ### 1.1.79 没修完的安装文档与发版链路
@@ -14,7 +44,7 @@
 - **`add .` 补软链说明（第 3 项）**：实测 `pnpm add ../pkg` 装出 `node_modules/demo-pkg -> ../../pkg`，`package.json` 记 `link:../pkg`，不是实体副本。英文版把 `add .` 写成 `use .` 的也一并改正。
 - **中文 README 第 226 行行首多余反引号（第 4 项）**、**英文 224 / 226 同句重复（第 5 项）**：均已修正。
 - **推 `main` 不触发 CI（第 7 项）**：不是 `release.yml` 的问题。远端默认分支就是 `main`，YML 也只监听 `main`；本地分支叫 `master` 且无 upstream，push 只到 `origin/master`。文档写清本地分支名也得叫 `main`，给出 `git branch -m master main` / `git push -u origin main`。
-- **`pnpm pack` 混入 bak（第 8 项）**：`package.json` 的 `files` 里 `lib` 后补 `"!lib/*.bak*"`（白名单目录会整目录打包，`.npmignore` 拦不住）。实测包内 57 文件、无 `*.bak*`、`lib/` 36 → 35、发布包 1325282 → **1278285** 字节。
+- **`pnpm pack` 混入 bak（第 8 项）**：`package.json` 的 `files` 里 `lib` 后补 `"!lib/*.bak*"`（白名单目录会整目录打包，`.npmignore` 拦不住）。实测包内 57 文件、无 `*.bak*`、`lib/` 36 → 35。
 
 ### 验证
 

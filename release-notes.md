@@ -1,3 +1,19 @@
+# 1.1.81-dsh
+
+## 中文
+
+- 版本 **1.1.81-dsh**，目标宿主 **0.2.1-rc.2**。**补丁表 83 条、注入文案、加密槽一个字没动**，这一版只改文档里的一句话。
+- **删掉「发布包从 1325282 字节降到 1278285 字节」这个说法**（1.1.80 的 `CHANGELOG.md`、`COMPAT-0.2.1.md`、`release-notes.md` 中英各一处）。那两个数是两种不同的产物：1325282 是 GitHub Release 的 **zip** 附件，1278285 是本地 `pnpm pack` 的 **tgz**。跨压缩格式比字节，差的量里混着格式差异，看不出例外规则到底省了多少；而且 1.1.80 实际发出去的 zip 是 1331350 字节，比 1.1.79 的 1325282 **还大**，读者翻开 Release 页面对不上。
+- **干净对照（同一份源码，只动 `files` 里一行）**：留着 `"!lib/*.bak*"` 时 tgz 是 1280088 字节，删掉它再 pack 是 1359703 字节，差 **79615** 字节 —— 与 `lib/core.js.bak-原版`（338208 字节，压缩后约 79.6 KB）对得上。这个数只对 tgz、只对这一版源码成立，所以没写进文档当卖点。
+- **文档现在只留能自己数的事实**：包内 57 个文件、`find -iname '*.bak*'` 为空、`lib/` 从 36 个降到 35 个。下载包解开就能核对，不依赖压缩算法、不依赖平台。
+
+## English
+
+- **1.1.81-dsh**, targeting host **0.2.1-rc.2**. **The 83-entry patch table, the injected prompt, and the sealed slot are untouched** — this release changes one sentence of documentation.
+- **The "release artefact from 1325282 to 1278285 bytes" claim is gone** (one occurrence each, Chinese and English, in the 1.1.80 sections of `CHANGELOG.md`, `COMPAT-0.2.1.md`, and `release-notes.md`). Those two numbers describe different artefacts: 1325282 is the GitHub Release **zip** attachment, 1278285 is a local `pnpm pack` **tgz**. Comparing bytes across compression formats hides how much the exclusion rule actually saved — and the zip 1.1.80 really shipped is 1331350 bytes, **larger** than 1.1.79's 1325282, so anyone opening the Releases page found the docs contradicting the artefact.
+- **Clean controlled comparison, same source, one line of `files` changed**: with `"!lib/*.bak*"` the tgz is 1280088 bytes; delete that line, repack, and it is 1359703 bytes — a **79615** byte difference that matches `lib/core.js.bak-原版` (338208 bytes, roughly 79.6 KB compressed). That figure holds only for the tgz and only for this source tree, so it is not advertised in the docs.
+- **The docs now keep only facts a reader can count**: 57 files in the package, `find -iname '*.bak*'` empty, `lib/` down from 36 entries to 35. Unpack the download and check.
+
 # 1.1.80-dsh
 
 ## 中文
@@ -9,7 +25,7 @@
 - **`add .` 补软链说明**。实测 `pnpm add ../pkg` 装出来的是 `node_modules/demo-pkg -> ../../pkg` 这样的软链，`package.json` 里记成 `link:../pkg`，**不是实体副本**，仓库一挪或一删插件就断。英文版原来还把 `add .` 写成了 `use .`，一并改正。
 - **中文 README 第 226 行行首多一对反引号**，把一句正文撑成了一个空代码块，修好；**英文版 224 / 226 是同一句话说了两遍**，删掉一遍。
 - **推 `main` 不触发 CI，不是 `release.yml` 的错**。远端默认分支一直是 `main`，`release.yml` 也只监听 `main`；问题是本地工作分支叫 `master` 而且没设 upstream，从它 push 只到 `origin/master`，等于推了个平行分支。文档写清「本地分支名也得叫 `main`，`git branch -vv` 要显示 `[origin/main]`」，并给了 `git branch -m master main` / `git push -u origin main` 两条命令。
-- **`pnpm pack` 不再把 `lib/core.js.bak-原版` 打进包**。`package.json` 的 `files` 里 `lib` 后面补了 `"!lib/*.bak*"`（白名单里的目录会把整个目录打进去，只靠 `.npmignore` 拦不住）。实测：包内 57 个文件、`find -iname '*.bak*'` 为空、`lib/` 从 36 个降到 35 个、发布包从 **1325282** 字节降到 **1278285** 字节。
+- **`pnpm pack` 不再把 `lib/core.js.bak-原版` 打进包**。`package.json` 的 `files` 里 `lib` 后面补了 `"!lib/*.bak*"`（白名单里的目录会把整个目录打进去，只靠 `.npmignore` 拦不住）。实测：包内 57 个文件、`find -iname '*.bak*'` 为空、`lib/` 从 36 个降到 35 个。
 - 三份文档（`README.md` / `README.zh-CN.md` / `COMPAT-0.2.1.md`）的 Node / cli.js 命令段现在是同一份口径，不会再出现一处改了一处没改。
 
 ## English
@@ -21,7 +37,7 @@
 - **`add .` now documents the symlink.** Measured: `pnpm add ../pkg` produces `node_modules/demo-pkg -> ../../pkg` and records `link:../pkg` in `package.json` — **a symlink, not a copy**, so moving or deleting the clone breaks the plugin. The English README also said `use .` where it meant `use add .`; fixed.
 - **Chinese README line 226 had a stray backtick pair at the start of the line**, turning a sentence of prose into an empty code block; fixed. **English lines 224 and 226 said the same thing twice**; one copy removed.
 - **A push to `main` not firing CI was never the workflow's fault.** The remote default branch has always been `main` and the workflow listens on `main`; the local working branch was called `master` with no upstream, so pushing from it only reached `origin/master` — a parallel branch. The docs now state that the local branch must also be `main`, that `git branch -vv` must show `[origin/main]`, and give `git branch -m master main` / `git push -u origin main`.
-- **`pnpm pack` no longer ships `lib/core.js.bak-原版`.** The `files` array in `package.json` gained `"!lib/*.bak*"` right after `lib` (a whitelisted directory pulls in everything under it, so `.npmignore` alone cannot block it). Measured: 57 files in the tarball, `find -iname '*.bak*'` empty, `lib/` down from 36 entries to 35, and the release artefact from **1325282** to **1278285** bytes.
+- **`pnpm pack` no longer ships `lib/core.js.bak-原版`.** The `files` array in `package.json` gained `"!lib/*.bak*"` right after `lib` (a whitelisted directory pulls in everything under it, so `.npmignore` alone cannot block it). Measured: 57 files in the tarball, `find -iname '*.bak*'` empty, and `lib/` down from 36 entries to 35.
 - All three documents (`README.md`, `README.zh-CN.md`, `COMPAT-0.2.1.md`) now carry the same Node / cli.js command block, so one cannot drift from another.
 
 # 1.1.79-dsh
