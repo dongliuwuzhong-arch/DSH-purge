@@ -1,3 +1,29 @@
+# 1.1.80-dsh
+
+## 中文
+
+- 版本 **1.1.80-dsh**，目标宿主 **0.2.1-rc.2**。**补丁表 83 条、注入文案、加密槽一个字没动**，这一版只把 1.1.79 没修完的安装文档与发版链路收尾。
+- **`dsh` 这个命令本身可能是坏的**。官方桌面端把宿主从 `app.asar` 解开之后，`resources/runtime/cli/bin/dsh.cmd` 里的 `%~dp0` 已经落到 `cli\bin\`，再往上退四级直接跑出 `C:\Software\` 之外；它指向的 `app.asar` 也已被改名成 `app.asar.bak`。结果是任何 `dsh xxx` 都报 `Error: Cannot find module ...\app.asar\dsh\node_modules\@deepseek-ai\dsh-desktop-host\lib\cli.js`。**没有改那个脚本**——它在安装目录里，而且宿主仓库 `lib/desktop.js:1655` 的 `patchOfficialCliCmdText()` 本来就会重写它，插件一应用就会被覆盖。文档改成绕开 PATH：用随包 Node 直调 `dsh-desktop-host/lib/cli.js`，中英两份都贴了可直接复制的三行。
+- **`$DSH_HOME/dsh-runtimes/...` 换成真实绝对路径**。那个变量只有助手进程自己才有，用户新开一个 PowerShell 里它是空的，照着抄只会得到 `Cannot find module`。现在写的是 `C:/Software/DSH/resources/runtime/primary-runtime/dependencies/node/bin/node.exe`。
+- **`<安装目录>` 占位符补真实示例**：官方 EXE 默认装在 `C:/Software/DSH`，代码块首行加了注释说明要换成自己的路径；并补一句「只有 `resources/app.asar`、还没解开成 `resources/app` 目录的机器，把 CLI 那行的 `app/` 换成 `app.asar/`」。
+- **`add .` 补软链说明**。实测 `pnpm add ../pkg` 装出来的是 `node_modules/demo-pkg -> ../../pkg` 这样的软链，`package.json` 里记成 `link:../pkg`，**不是实体副本**，仓库一挪或一删插件就断。英文版原来还把 `add .` 写成了 `use .`，一并改正。
+- **中文 README 第 226 行行首多一对反引号**，把一句正文撑成了一个空代码块，修好；**英文版 224 / 226 是同一句话说了两遍**，删掉一遍。
+- **推 `main` 不触发 CI，不是 `release.yml` 的错**。远端默认分支一直是 `main`，`release.yml` 也只监听 `main`；问题是本地工作分支叫 `master` 而且没设 upstream，从它 push 只到 `origin/master`，等于推了个平行分支。文档写清「本地分支名也得叫 `main`，`git branch -vv` 要显示 `[origin/main]`」，并给了 `git branch -m master main` / `git push -u origin main` 两条命令。
+- **`pnpm pack` 不再把 `lib/core.js.bak-原版` 打进包**。`package.json` 的 `files` 里 `lib` 后面补了 `"!lib/*.bak*"`（白名单里的目录会把整个目录打进去，只靠 `.npmignore` 拦不住）。实测：包内 57 个文件、`find -iname '*.bak*'` 为空、`lib/` 从 36 个降到 35 个、发布包从 **1325282** 字节降到 **1278285** 字节。
+- 三份文档（`README.md` / `README.zh-CN.md` / `COMPAT-0.2.1.md`）的 Node / cli.js 命令段现在是同一份口径，不会再出现一处改了一处没改。
+
+## English
+
+- **1.1.80-dsh**, targeting host **0.2.1-rc.2**. **The 83-entry patch table, the injected prompt, and the sealed slot are untouched** — this release finishes the install and release-plumbing fixes that 1.1.79 left open.
+- **The `dsh` command itself can be broken.** Once the desktop host has unpacked the runtime out of `app.asar`, the `%~dp0` in `resources/runtime/cli/bin/dsh.cmd` already resolves to `cli\bin\`, so climbing four levels lands outside `C:\Software\`; the `app.asar` it points at has also been renamed to `app.asar.bak`. Every `dsh xxx` therefore dies with `Error: Cannot find module ...\app.asar\dsh\node_modules\@deepseek-ai\dsh-desktop-host\lib\cli.js`. **The script was left alone** — it lives in the install directory, and `patchOfficialCliCmdText()` in the host repo (`lib/desktop.js:1655`) rewrites it on its own as soon as the plugin applies. The docs now bypass PATH entirely: call `dsh-desktop-host/lib/cli.js` with the bundled Node, with a copy-pasteable three-liner in both READMEs.
+- **`$DSH_HOME/dsh-runtimes/...` replaced with a real absolute path.** That variable only exists inside the assistant's own process; in a fresh PowerShell it is empty and following the old snippet only produced `Cannot find module`. The docs now name `C:/Software/DSH/resources/runtime/primary-runtime/dependencies/node/bin/node.exe`.
+- **The `<install dir>` placeholder gets a real example**: the official EXE installs to `C:/Software/DSH` by default, the first line of the block says to substitute your own path, and a new note covers machines that still only have `resources/app.asar` — swap the `app/` in the CLI path for `app.asar/`.
+- **`add .` now documents the symlink.** Measured: `pnpm add ../pkg` produces `node_modules/demo-pkg -> ../../pkg` and records `link:../pkg` in `package.json` — **a symlink, not a copy**, so moving or deleting the clone breaks the plugin. The English README also said `use .` where it meant `use add .`; fixed.
+- **Chinese README line 226 had a stray backtick pair at the start of the line**, turning a sentence of prose into an empty code block; fixed. **English lines 224 and 226 said the same thing twice**; one copy removed.
+- **A push to `main` not firing CI was never the workflow's fault.** The remote default branch has always been `main` and the workflow listens on `main`; the local working branch was called `master` with no upstream, so pushing from it only reached `origin/master` — a parallel branch. The docs now state that the local branch must also be `main`, that `git branch -vv` must show `[origin/main]`, and give `git branch -m master main` / `git push -u origin main`.
+- **`pnpm pack` no longer ships `lib/core.js.bak-原版`.** The `files` array in `package.json` gained `"!lib/*.bak*"` right after `lib` (a whitelisted directory pulls in everything under it, so `.npmignore` alone cannot block it). Measured: 57 files in the tarball, `find -iname '*.bak*'` empty, `lib/` down from 36 entries to 35, and the release artefact from **1325282** to **1278285** bytes.
+- All three documents (`README.md`, `README.zh-CN.md`, `COMPAT-0.2.1.md`) now carry the same Node / cli.js command block, so one cannot drift from another.
+
 # 1.1.79-dsh
 
 ## 中文

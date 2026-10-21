@@ -3,6 +3,26 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 兼容变体**。
 上游以 MIT 发布、作者已宣布停更（1.1.71，`dshTarget: 0.2.0-rc.2`）。
 
+## 1.1.80-dsh · 2026-10-21
+
+### 1.1.79 没修完的安装文档与发版链路
+
+承接 1.1.79 的八项复查，这一版把其中真正没落地的收尾。**补丁表 83 条、注入文案、加密槽全部未变。**
+
+- **`dsh` 命令本身是坏的（第 1 项）**：`C:\Software\DSH\resources\runtime\cli\bin\dsh.cmd` 里 `%~dp0` 已经落到 `cli\bin\`，`..\..\..\..` 退到 `C:\Software\` 之外；它指向的 `app.asar` 又已被改名成 `app.asar.bak`（真实目录是 `resources\app`）。任何 `dsh xxx` 都报 `Error: Cannot find module ...\app.asar\dsh\node_modules\@deepseek-ai\dsh-desktop-host\lib\cli.js`。**没有改那个脚本**：它在安装目录里，且宿主 `lib/desktop.js:1655` 的 `patchOfficialCliCmdText()` 会重写它。文档改成绕开 PATH —— 随包 Node + `dsh-desktop-host/lib/cli.js`，中英各给一段可复制的三行。
+- **`$DSH_HOME/dsh-runtimes/...` 换成真实路径（第 2、6 项）**：那个变量只有助手进程自己才有，用户新开 PowerShell 里是空的。改成 `C:/Software/DSH/resources/runtime/primary-runtime/dependencies/node/bin/node.exe`，并补 `<安装目录>` 的真实示例与 `app.asar` / `app` 两种形态说明。
+- **`add .` 补软链说明（第 3 项）**：实测 `pnpm add ../pkg` 装出 `node_modules/demo-pkg -> ../../pkg`，`package.json` 记 `link:../pkg`，不是实体副本。英文版把 `add .` 写成 `use .` 的也一并改正。
+- **中文 README 第 226 行行首多余反引号（第 4 项）**、**英文 224 / 226 同句重复（第 5 项）**：均已修正。
+- **推 `main` 不触发 CI（第 7 项）**：不是 `release.yml` 的问题。远端默认分支就是 `main`，YML 也只监听 `main`；本地分支叫 `master` 且无 upstream，push 只到 `origin/master`。文档写清本地分支名也得叫 `main`，给出 `git branch -m master main` / `git push -u origin main`。
+- **`pnpm pack` 混入 bak（第 8 项）**：`package.json` 的 `files` 里 `lib` 后补 `"!lib/*.bak*"`（白名单目录会整目录打包，`.npmignore` 拦不住）。实测包内 57 文件、无 `*.bak*`、`lib/` 36 → 35、发布包 1325282 → **1278285** 字节。
+
+### 验证
+
+- `node --check lib/index.js lib/core.js lib/reapply.js client.js bin/dsh-purge.js` 全过，`node --input-type=module -e "import './lib/index.js'"` 打印 `import OK`。
+- 三份文档代码围栏均为偶数（42 / 42 / 18），无单行奇数反引号；全仓库 grep `dsh-runtimes`、`<安装目录>` 均为 0 命中。
+- `pnpm pack` 三轮产物一致。
+
+---
 ## 1.1.79-dsh · 2026-10-21
 
 ### 安装与发版链路对齐真机

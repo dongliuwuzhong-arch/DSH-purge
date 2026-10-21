@@ -4,7 +4,7 @@
 
 本仓库：https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2 （公开，默认分支 `main`）
 上游：[YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge)（MIT，作者已宣布暂停维护）
-本仓库是基于上游 `master`（1.1.71）的**兼容性修复分支**，当前版本 `1.1.79-dsh`。
+本仓库是基于上游 `master`（1.1.71）的**兼容性修复分支**，当前版本 `1.1.80-dsh`。
 
 ---
 
@@ -211,6 +211,53 @@ README 的宿主版本徽章与正文 `0.2.0-rc.2` → `0.2.1-rc.2`；解压后�
 
 ---
 
+## 1.1.80 · 安装文档八项收尾（2026-10-21）
+
+1.1.79 之后对着真机把八项复查走完，这一版是收尾。**补丁表、注入文案、加密槽一个字没动。**
+
+**一、`dsh` 命令本身是坏的**
+
+`C:\Software\DSH\resources\runtime\cli\bin\dsh.cmd` 里 `%~dp0` 已经落在 `cli\bin\`，`..\..\..\..` 直接退到 `C:\Software\` 之外；它指向的 `app.asar` 又被改名成 `app.asar.bak`（真实目录 `resources\app`）。
+
+```
+Error: Cannot find module 'C:\Software\DSH\resources\app.asar\dsh\node_modules\@deepseek-ai\dsh-desktop-host\lib\cli.js'
+```
+
+同目录下的 `dsh.cmd.dsh-purge.bak` 与现行 `dsh.cmd` 逐字节相同，一样坏。
+
+**没有改那个脚本**，两个原因：它在安装目录里；且宿主 `lib/desktop.js:1655` 的 `patchOfficialCliCmdText()` 本来就会重写它（`CLI_ASAR_ENTRY` / `CLI_UNPACKED_ENTRY` / `CLI_DIR_ENTRY` 三级回退），只在「插件已应用且判定要解包」时跑。文档改成绕开 PATH：
+
+```bash
+NODE="C:/Software/DSH/resources/runtime/primary-runtime/dependencies/node/bin/node.exe"
+CLI="C:/Software/DSH/resources/app/dsh/node_modules/@deepseek-ai/dsh-desktop-host/lib/cli.js"
+"$NODE" "$CLI" plugin --profile web add <tarball>
+```
+
+实测 `--version` 出 `0.2.1-rc.2`，`plugin --profile web list` 能列出 `dsh-profile-web` 与已装插件。
+
+**二、`$DSH_HOME` 与 `<安装目录>`**
+
+`$DSH_HOME` 只有助手进程自己有，用户新开 PowerShell 里是空的，照抄只会得到 `Cannot find module`。全部换成真实绝对路径；`<安装目录>` 补真实示例 `C:/Software/DSH`，并说明只有 `resources/app.asar`、还没解开成 `resources/app` 的机器要把 CLI 路径里的 `app/` 换成 `app.asar/`。
+
+**三、`add .` 装出来是软链**
+
+实测 `pnpm add ../pkg` → `node_modules/demo-pkg -> ../../pkg`，`package.json` 记 `"demo-pkg": "link:../pkg"`。仓库一挪或一删，插件就断。英文 README 里写成 `use .` 的也改成 `use add .`。
+
+**四、推 `main` 不触发 CI 的真相**
+
+不是 `release.yml` 的错：远端默认分支一直是 `main`，YML 也只监听 `main`。问题是本地工作分支叫 `master` 且 `branch.master` 没有 upstream，从它 push 只写 `origin/master`。修法在本地：
+
+```bash
+git branch -m master main
+git push -u origin main
+git branch -vv    # 应显示 * main <sha> [origin/main]
+```
+
+**五、`pnpm pack` 不再混入 `.bak`**
+
+`package.json` 的 `files` 是白名单，但白名单里的 `lib` 会把整个目录打进去，`.npmignore` 拦不住 `lib/core.js.bak-原版`。补 `"!lib/*.bak*"` 后：包内 57 个文件、`find -iname '*.bak*'` 为空、`lib/` 36 → 35、发布包 **1325282 → 1278285** 字节。
+
+---
 ## 1.1.79 · 安装文档与发版链路对齐实际（2026-10-21）
 
 1.1.78 之后对着真机重跑了一遍安装链路，发现文档写的三条路**没有一条能按字面走通**：
@@ -268,7 +315,7 @@ plugin 子命令里 `if (!manageDesktopProfile) rejectElectronProfile(plugin, op
   破甲提示词注入主链路、client 侧 UI 注入（`client.js` 未改动一个字节）。
 - **移除**：红队演练台（`lib/redteam/`、`presets/redteam/`、`skills/redteam/` 及构建脚本与授权文档）。
   相关调用点已摘除，`isRedteamSession()` 恒返回 false。
-- **版本**：`1.1.71` → `1.1.79-dsh`，`dshTarget` → `0.2.1-rc.2`。
+- **版本**：`1.1.71` → `1.1.80-dsh`，`dshTarget` → `0.2.1-rc.2`。
 
 ---
 
