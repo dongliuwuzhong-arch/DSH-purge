@@ -3,6 +3,60 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 兼容变体**。
 上游以 MIT 发布、作者已宣布停更（1.1.71，`dshTarget: 0.2.0-rc.2`）。
 
+## 1.1.82-dsh · 2026-10-24
+
+### 修 #89 是死代码：注入块这次真的挪到人格之后了
+
+1.1.77 的 CHANGELOG 写着「**顺序：从最前挪到最后**」，并新增补丁 #89 HUNG_PROMPT_AFTER_PERSONA
+把注入块挂到 renderedPrompt 之后。**这个改动在 1.1.77 ~ 1.1.81 之间从未真正生效。**
+
+原因在 lib/identity.js 的 leadWithInject()：
+
+- 它**无条件**把注入块 push 进 head，最后 return [...head, ...rest] —— 永远在最前；
+- 而 #89 的条件是「注入**不在**提示词里，才追加到末尾」；
+- 于是 #89 每次都觉得「已经在里面了」，什么都不做。
+
+两者互相抵消，#89 成了一段永远走不到的死代码。
+
+**实测**（2026-10-24 宿主机）：
+
+    全日志 502 条 assemble.rewrite 记录：afterCloser = -1  → 502/502
+    近期 20 条：injectHead = true → 20/20
+
+injectHead 由 sections[0].name === "dsh-purge" 算出，它一直是 true；
+afterCloser 是 </project_instructions> 之后还剩多少字节，它一直是 -1。
+两个数一起说明：注入块从头到尾都挂在人格**前面**。
+
+重启宿主也不变，说明不是旧进程问题，是代码路径问题。
+
+### 改动
+
+lib/identity.js，一行：
+
+    -  return [...head, ...rest];
+    +  return [...rest, ...head];
+
+head 里是 dsh-purge（注入正文）和 dshpg-capabilities（能力选用协议），
+既然要「先人格、后能力边界」，这两个一起挪到末尾。
+
+### 验证
+
+离线跑 rewritePromptAssembly()，喂真实 prompt-inject.md + AGENTS.md 前 1500 字：
+
+    段落顺序: ["deployment:persona-prefix","agents-md","deployment:persona-suffix","dsh-purge","dshpg-capabilities"]
+    injectHead = false
+    注入块出现在索引: 1506
+    人格正文出现在索引: 4
+
+### 提醒：判据只用 injectHead
+
+afterCloser **不能**用来判断这个改动。它量的是 </project_instructions> 之后还有多少字节，
+而 rewritePromptAssembly 会把人格段外面的 ChatML 与 project_instructions 包裹剥掉
+（stripChatmlTags / stripHarnessPersona），closer 根本不在最终结果里，所以它恒为 -1。
+这不是 bug，是那个指标本身失效了。
+
+**看 injectHead：改前 true，改后应为 false。**
+
 ## 1.1.81-dsh · 2026-10-21
 
 ### 删掉一处跨产物比的字节数
