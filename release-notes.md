@@ -2,6 +2,73 @@
 
 ## 中文
 
+- 版本 **1.1.83-dsh**，目标宿主 **0.2.1-rc.3**（rc.1 / rc.2 同样适用）。**补丁表 83 条一条没动**。
+
+### 修 hostFs 缺 closeSync：备份机制自始失效
+
+`lib/extract-asar.js` 的 `HOST_SYNC` 白名单里有 `openSync`，**没有 `closeSync`**。
+`backupAll()` 用 `fs.openSync(bak, "wx")` 建占位、再用 `fs.closeSync(fd)` 关闭，
+而这里 `fs` 就是 `hostFs`，于是 `closeSync` 是 `undefined` → `TypeError` 被
+`catch { /* ignore */ }` 吞掉 → **占位句柄始终没关**。
+
+Windows 上 rename 覆盖一个仍被本进程持有的句柄会失败：
+
+    Error: EPERM: operation not permitted, rename '...index.js.dshpurge.bak.<pid>.<ts>.copytmp'
+                                      -> '...index.js.dshpurge.bak'
+
+后果很重：**53 个目标文件全部备份失败**，`.dshpurge.bak` 一个都没生成；
+而 `revertAll()` 在「没有 bak」时按 #41 的设计跳过、不删目标，
+所以**回滚永久失效，且状态面板只显示「备份: 无」，没有任何报错**。
+
+修法：白名单补 `"closeSync"` 一项。
+
+验证过程：
+
+- 修复前 `hostFs.closeSync === undefined`，修复后是 `function`；
+- 手动不关句柄直接 rename → `EPERM`（与线上错误逐字一致）；关掉句柄 → rename 成功；
+- 修复后 `backupAll()` 返回 `made: 53, errors: 0`，53 个 bak 大小全部与原文件一致。
+
+**注意**：修复后首次跑 `backupAll()` 时补丁已打在宿主上，生成的 bak 存的是**打完补丁的版本**。
+这种伪备份比没有更危险——`revertAll()` 会照它还原，等于没还原。已用 `app.asar.bak` 里的
+官方原文逐个覆盖，现在 53 个 bak **全部等于 asar 原文**（逐字节校验）。
+
+### 补齐 1.1.82（此前只推了代码，没发 Release）
+
+- **1.1.82 修的是真 bug**：注入块本该挂在人格**之后**，实际一直挂在**前面**。原因在 `lib/identity.js` 的 `leadWithInject()`——它无条件把注入块 push 进 head 并 `return [...head, ...rest]`，而补丁 #89 的条件是「注入不在提示词里才追加到末尾」，两者互相抵消，#89 在 1.1.77 ~ 1.1.81 之间是死代码。
+- 改法是一行：`return [...rest, ...head]`。`dsh-purge`（注入正文）与 `dshpg-capabilities`（能力选用协议）一起挪到末尾。
+- **判据只用 `injectHead`**：改前 `true`，改后 `false`。`afterCloser` 不能用来判断——它量的是 `</project_instructions>` 之后的字节数，而那个包裹在最终结果里已被剥掉，所以它恒为 `-1`。
+- 本机 2026-10-24 实测：重启后 133 条装配记录，`injectHead=false` 133/133，`policy=always` 133/133，`dropWorkspaceBaseline=true` **0** 条。
+
+### 对齐 0.2.1-rc.3 声明
+
+- `dshTarget`：`0.2.1-rc.2` → `0.2.1-rc.3`；`description` 口径同步；README 中英两版的宿主版本描述改为「rc.2 / rc.3」。
+- **证据一 · 包级差异**：把 `@deepseek-ai/*` 全部 83 个依赖包两个版本各拉一份逐文件比对，**73 个包代码完全相同**（只差 `package.json` 里的版本号），5 个包有实际差异，且都不在补丁锚点上——`dsh-web-app` 在 `cordis.patch.yml` 第 428 行新增 `entry-customization` 条目（我们的锚点在第 19 行 `personaPrefix`），`dsh-tool-cordis` / `dsh-cordis-client-runner` / `dsh-client-ui-agent-preset` 改的是补丁零引用的文件，`dsh-agent-preset` 改的是一个 skill 的参考文档。
+- **证据二 · 锚点实检**：把 rc.3 全量解包后直接调 `patchStatus()`，以 rc.2 同条件跑一遍作对照：
+
+      rc.2: applied 5 / pending 20 / skipped 3 / missing_file 24 / na 31
+      rc.3: applied 5 / pending 20 / skipped 3 / missing_file 24 / na 31
+      rc.3 特有漂移: (无)
+
+  上述 pending 是临时目录缺 `dsh/node_modules/...` 嵌套路径所致，非版本漂移。真机 rc.2 宿主上的实际数字是 applied 60 / pending 2 / skipped 7 / na 14。
+- **证据三 · `dshTarget` 不被宿主读取**：`lib/` `bin/` `scripts/` `client.js` 均零引用，宿主侧 `@deepseek-ai/*/lib/index.js` 亦无引用。该字段是纯元数据。
+
+### 本机升级到 rc.3 的实测
+
+- 宿主 `0.2.1-rc.3` 装好后，破甲执行 apply：`resources\app` 解出 18190 个文件，补丁 **60/66 applied / 1 pending / 5 skipped**。
+- `app.asar` 改名成 `app.asar.bak` 后，主进程命令行变为 `--expose-internals ...\resources\app\dsh\node_modules\@deepseek-ai\dsh-desktop-host\lib\index.js`，补丁真正进入运行时。
+- 抽样验证生效：`dsh-tool-bash` 里 `do not retry another way` 出现 **0** 次，已换成 `a sandbox notice; continue the task`；`dsh-agent-loop` 里 `dshPurgeHung` 挂载块在位；审批话术 `auto-granted` 在位。
+- 顺带修了 `runtime\cli\bin\dsh.cmd`：它写死 `app.asar\...\cli.js`，而 asar 已改名，导致任何 `dsh xxx` 都报找不到模块。改为有解包目录就用解包目录、否则回退 asar。实测 `dsh --version` 输出 `0.2.1-rc.3`。
+
+### 仍未覆盖（诚实标注）
+
+- **#87 `HUNG_PROMPT_LF_NEEDLE` 保持 pending**。它的 LF 归一化保险没装上（marker `[dsh-purge-87] hang needle uses LF` 不在文件里），但 #89 的挂载逻辑在跑，且 `fullBytes == injectBytes == 8150`，无重复注入。属「功能在、防御没加」，不影响使用。
+- **桌面壳 `resources\app\lib\main.js` 的 #45/#46** 在 Electron 安装包内（`@deepseek-ai/dsh-desktop` 为 `private: true`，npm 无包），只能装完才能验，本仓库没有参考实现里那套 desktop-handoff / asar-swap 测试。
+- **`app.asar` 交接的未来风险**：宿主从解包目录跑时，官方更新器若重新生成 `app.asar`，Electron 会优先读 asar，补丁会再次「失效」。这是既有格局，非本版引入。
+
+
+
+## 中文
+
 - 版本 **1.1.83-dsh**，目标宿主 **0.2.1-rc.3**（rc.1 / rc.2 同样适用）。**补丁表 83 条一条没动**，这一版把 1.1.82 的欠账一起补上，并把声明对齐到 rc.3。
 
 ### 补齐 1.1.82（此前只推了代码，没发 Release）
