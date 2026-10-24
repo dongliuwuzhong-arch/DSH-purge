@@ -25,6 +25,26 @@ Windows 上 rename 覆盖一个仍被本进程持有的句柄会失败：
 
 验证：修复前 `hostFs.closeSync === undefined`；不关句柄 rename → `EPERM`（与线上一致），关句柄 → 成功；修复后 `backupAll()` 返回 `made: 53, errors: 0`，大小全部一致。
 
+### #87 补锚点：等待已久的 LF 归一化终于装上
+
+`#87 HUNG_PROMPT_LF_NEEDLE` 在 rc.3 上一直是 `pending`，`#88`/`#89` 跟着 `skipped`。
+原因是它的 8 条锚点全部针对 `system` 变量分支或历史中间态，而 rc.3 的
+`dsh-agent-loop` 走的是 `step(assembly)` 分支、变量名是 `renderedPrompt`，
+一条都命中不了。
+
+后果不是功能缺失，而是**防御缺失**：挂载逻辑（`#89` 那部分）早在文件里了，
+但没有 LF 归一化比对——CRLF 环境下 `includes()` 会误判「注入不在」，从而重复挂一份。
+
+修法：给 `#87` 补第 9 条锚点，直接对齐当前真实代码。离线验证：
+
+- 锚点在 rc.3 文件上命中 **1 次**（唯一）；
+- 产出含 `[dsh-purge-87]` 与 `[dsh-purge-89]` 双标记；
+- 产出 `node --check` 通过；
+- 逻辑测试：无注入 / 已有 LF 注入 / 已有 CRLF 注入 三种场景，挂载份数都是 **1**（不重复）。
+
+应用后：**61/66 applied，0 pending**。剩下 5 条全是 `skipped`，且都是布局类软补丁
+（Web 面身份句 x2、0.1.5 兼容、rewind 子项、minimal 工具表），宿主形态本来就没有对应锚点，正常。
+
 ### 顺带修正脏备份
 
 修复后首次跑 `backupAll()` 时补丁已打在宿主上，bak 存的是**打完补丁的版本**。
