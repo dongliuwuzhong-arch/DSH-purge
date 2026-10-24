@@ -1,3 +1,71 @@
+# 1.1.83-dsh
+
+## 中文
+
+- 版本 **1.1.83-dsh**，目标宿主 **0.2.1-rc.3**（rc.1 / rc.2 同样适用）。**补丁表 83 条一条没动**，这一版把 1.1.82 的欠账一起补上，并把声明对齐到 rc.3。
+
+### 补齐 1.1.82（此前只推了代码，没发 Release）
+
+- **1.1.82 修的是真 bug**：注入块本该挂在人格**之后**，实际一直挂在**前面**。原因在 `lib/identity.js` 的 `leadWithInject()`——它无条件把注入块 push 进 head 并 `return [...head, ...rest]`，而补丁 #89 的条件是「注入不在提示词里才追加到末尾」，两者互相抵消，#89 在 1.1.77 ~ 1.1.81 之间是死代码。
+- 改法是一行：`return [...rest, ...head]`。`dsh-purge`（注入正文）与 `dshpg-capabilities`（能力选用协议）一起挪到末尾。
+- **判据只用 `injectHead`**：改前 `true`，改后 `false`。`afterCloser` 不能用来判断——它量的是 `</project_instructions>` 之后的字节数，而那个包裹在最终结果里已被剥掉，所以它恒为 `-1`。
+- 本机 2026-10-24 实测：重启后 133 条装配记录，`injectHead=false` 133/133，`policy=always` 133/133，`dropWorkspaceBaseline=true` **0** 条。
+
+### 对齐 0.2.1-rc.3 声明
+
+- `dshTarget`：`0.2.1-rc.2` → `0.2.1-rc.3`；`description` 口径同步；README 中英两版的宿主版本描述改为「rc.2 / rc.3」。
+- **证据一 · 包级差异**：把 `@deepseek-ai/*` 全部 83 个依赖包两个版本各拉一份逐文件比对，**73 个包代码完全相同**（只差 `package.json` 里的版本号），5 个包有实际差异，且都不在补丁锚点上——`dsh-web-app` 在 `cordis.patch.yml` 第 428 行新增 `entry-customization` 条目（我们的锚点在第 19 行 `personaPrefix`），`dsh-tool-cordis` / `dsh-cordis-client-runner` / `dsh-client-ui-agent-preset` 改的是补丁零引用的文件，`dsh-agent-preset` 改的是一个 skill 的参考文档。
+- **证据二 · 锚点实检**：把 rc.3 全量解包后直接调 `patchStatus()`，以 rc.2 同条件跑一遍作对照：
+
+      rc.2: applied 5 / pending 20 / skipped 3 / missing_file 24 / na 31
+      rc.3: applied 5 / pending 20 / skipped 3 / missing_file 24 / na 31
+      rc.3 特有漂移: (无)
+
+  上述 pending 是临时目录缺 `dsh/node_modules/...` 嵌套路径所致，非版本漂移。真机 rc.2 宿主上的实际数字是 applied 60 / pending 2 / skipped 7 / na 14。
+- **证据三 · `dshTarget` 不被宿主读取**：`lib/` `bin/` `scripts/` `client.js` 均零引用，宿主侧 `@deepseek-ai/*/lib/index.js` 亦无引用。该字段是纯元数据。
+
+### 本机升级到 rc.3 的实测
+
+- 宿主 `0.2.1-rc.3` 装好后，破甲执行 apply：`resources\app` 解出 18190 个文件，补丁 **60/66 applied / 1 pending / 5 skipped**。
+- `app.asar` 改名成 `app.asar.bak` 后，主进程命令行变为 `--expose-internals ...\resources\app\dsh\node_modules\@deepseek-ai\dsh-desktop-host\lib\index.js`，补丁真正进入运行时。
+- 抽样验证生效：`dsh-tool-bash` 里 `do not retry another way` 出现 **0** 次，已换成 `a sandbox notice; continue the task`；`dsh-agent-loop` 里 `dshPurgeHung` 挂载块在位；审批话术 `auto-granted` 在位。
+
+### 仍未覆盖（诚实标注）
+
+- **#87 `HUNG_PROMPT_LF_NEEDLE` 保持 pending**。它的 LF 归一化保险没装上（marker `[dsh-purge-87] hang needle uses LF` 不在文件里），但 #89 的挂载逻辑在跑，且 `fullBytes == injectBytes == 8150`，无重复注入。属「功能在、防御没加」，不影响使用。
+- **桌面壳 `resources\app\lib\main.js` 的 #45/#46** 在 Electron 安装包内（`@deepseek-ai/dsh-desktop` 为 `private: true`，npm 无包），只能装完才能验，本仓库没有参考实现里那套 desktop-handoff / asar-swap 测试。
+- **`app.asar` 交接的未来风险**：宿主从解包目录跑时，官方更新器若重新生成 `app.asar`，Electron 会优先读 asar，补丁会再次「失效」。这是既有格局，非本版引入。
+
+## English
+
+- **1.1.83-dsh**, targeting host **0.2.1-rc.3** (rc.1 / rc.2 also fine). **The 83-entry patch table is untouched.** This release settles the unreleased 1.1.82 fix and aligns the declarations to rc.3.
+
+### 1.1.82 catch-up (code was pushed, no Release was ever cut)
+
+- **1.1.82 fixed a real bug**: the injected block belongs **after** the persona but had always been **before** it. `leadWithInject()` in `lib/identity.js` unconditionally pushed the block into `head` and returned `[...head, ...rest]`, while patch #89 only appends when the injection is *absent* — the two cancelled out, so #89 was dead code from 1.1.77 through 1.1.81.
+- The fix is one line: `return [...rest, ...head]`, moving `dsh-purge` (injected body) and `dshpg-capabilities` (capability protocol) to the end together.
+- **Judge it by `injectHead` only**: `true` before, `false` after. `afterCloser` is useless here — it measures bytes past `</project_instructions>`, and that wrapper is stripped from the final result, so it is permanently `-1`.
+- Measured locally on 2026-10-24: after restart, 133 assembly records, `injectHead=false` 133/133, `policy=always` 133/133, `dropWorkspaceBaseline=true` **zero** times.
+
+### Declarations aligned to 0.2.1-rc.3
+
+- `dshTarget`: `0.2.1-rc.2` → `0.2.1-rc.3`; `description` updated; both READMEs now say "rc.2 / rc.3".
+- **Evidence 1 — package diff**: all 83 `@deepseek-ai/*` dependency packages were fetched in both versions and compared file by file. **73 are byte-identical** apart from the version field in `package.json`. Five differ, and none of them sit on a patch anchor — `dsh-web-app` adds an `entry-customization` row at line 428 of `cordis.patch.yml` (our anchor is `personaPrefix` at line 19); `dsh-tool-cordis`, `dsh-cordis-client-runner` and `dsh-client-ui-agent-preset` only change files the patch table never references; `dsh-agent-preset` changes a skill reference document.
+- **Evidence 2 — anchor check**: rc.3 was fully unpacked and `patchStatus()` run against it, with rc.2 as the control. Both produced identical buckets, and **no pending entry was unique to rc.3**. (The pending entries come from the temporary tree lacking the `dsh/node_modules/...` nesting, not from drift. On the real rc.2 host the numbers were applied 60 / pending 2 / skipped 7 / na 14.)
+- **Evidence 3 — `dshTarget` is not read by the host**: zero references in `lib/`, `bin/`, `scripts/`, `client.js`, and none in the host's own `@deepseek-ai/*/lib/index.js`. It is metadata only.
+
+### Measured upgrade to rc.3 on this machine
+
+- After installing host `0.2.1-rc.3`, apply unpacked 18190 files into `resources\app` and wrote **60/66 applied, 1 pending, 5 skipped**.
+- Renaming `app.asar` to `app.asar.bak` switched the main process command line to `--expose-internals ...\resources\app\dsh\node_modules\@deepseek-ai\dsh-desktop-host\lib\index.js`, so the patches actually reach the runtime.
+- Spot checks confirm effect: `do not retry another way` now appears **zero** times in `dsh-tool-bash`, replaced by `a sandbox notice; continue the task`; the `dshPurgeHung` block is present in `dsh-agent-loop`; the `auto-granted` approval wording is in place.
+
+### Still uncovered (stated honestly)
+
+- **#87 `HUNG_PROMPT_LF_NEEDLE` stays pending.** Its LF-normalisation safety net is not installed (marker `[dsh-purge-87] hang needle uses LF` is absent), though #89's mounting logic runs and `fullBytes == injectBytes == 8150` means nothing is injected twice. Functionality present, defence missing — not a blocker.
+- **#45/#46 on the desktop shell `resources\app\lib\main.js`** live inside the Electron installer (`@deepseek-ai/dsh-desktop` is `private: true` and not on npm), so they can only be verified after installation. This repository lacks the desktop-handoff / asar-swap test suite the reference implementation has.
+- **Future risk around the `app.asar` handoff**: while the host runs from the unpacked directory, an official update that regenerates `app.asar` will make Electron prefer the archive again and the patches will look "lost". Pre-existing arrangement, not introduced here.
+
 # 1.1.81-dsh
 
 ## 中文
