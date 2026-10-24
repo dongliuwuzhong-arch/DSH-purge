@@ -1,6 +1,6 @@
 # dsh-purge-021rc2
 
-**dsh-purge 的 0.2.1-rc.2 兼容变体**
+**dsh-purge 的 0.2.1-rc.2 / rc.3 兼容变体**
 
 本仓库：https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2 （公开，默认分支 `main`）
 上游：[YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge)（MIT，作者已宣布暂停维护）
@@ -54,6 +54,53 @@ Start-Process '<install>\DeepSeek Harness.exe'
 ```
 
 **回滚**：改回原名即可。
+
+---
+
+## 0.2.1-rc.3 实测记录（2026-10-24）
+
+**结论：补丁表零改动，只把声明对齐。**
+
+### 证据一：rc.2 → rc.3 的包级差异
+
+把 `@deepseek-ai/*` 全部 83 个依赖包两个版本各拉一份逐文件比对：
+
+- **73 个包代码完全相同**，差异只在 `package.json` 里的版本号字段；
+- 5 个包有实际差异：
+
+| 包 | 差异 | 是否补丁目标 |
+| --- | --- | --- |
+| `dsh-web-app` | `cordis.patch.yml` 第 428 行新增 `entry-customization` 插件条目 | 是，但锚点在第 19 行 `personaPrefix`，不重叠 |
+| `dsh-tool-cordis` | `lib/types/api-catalog.js` | 否（零引用） |
+| `dsh-agent-preset` | skill 的 `references/packages.md` | 否（补丁打的是 cordis.patch.yml） |
+| `dsh-cordis-client-runner` | `lib/client.js` | 否（零引用） |
+| `dsh-client-ui-agent-preset` | README + `lib/client.js` + 新增 `analytics.d.ts` | 否（零引用） |
+
+### 证据二：83 条补丁在 rc.3 源码上的命中情况
+
+把 rc.3 全量解包后直接调用 `patchStatus()`，并以 rc.2 同条件跑一遍作对照：
+
+    rc.2: applied 5 / pending 20 / skipped 3 / missing_file 24 / na 31
+    rc.3: applied 5 / pending 20 / skipped 3 / missing_file 24 / na 31
+    rc.3 特有漂移: (无)
+
+（上述 pending 是临时目录缺 `dsh/node_modules/...` 嵌套路径所致，非版本漂移；
+真机 rc.2 宿主上的实际数字是 applied 60 / pending 2 / skipped 7 / na 14。）
+
+### 证据三：`dshTarget` 不被宿主读取
+
+全库 grep：`lib/` `bin/` `scripts/` `client.js` 均零引用；宿主侧
+`@deepseek-ai/*/lib/index.js` 亦无引用。该字段是纯元数据，改它不改变任何运行时行为。
+
+### 未覆盖的部分（升级前必须知道）
+
+- **桌面壳 `resources/app/lib/main.js`**：补丁 #45/#46 打在
+  `this.updater.quitAndInstall(true, true)` 与 `var DesktopUpdateCoordinator = class {` 上。
+  该文件在 Electron 安装包内（`@deepseek-ai/dsh-desktop` 为 `private: true`，npm 无包），
+  **只能装完才能验证**。本仓库没有参考实现里那套 desktop-handoff / asar-swap 测试。
+- **`app.asar` 交接**：本机当前 `app.asar` 已改名为 `app.asar.bak`，实际运行解包目录
+  `resources/app`。官方更新器装新版时写向何处未验证；若写新 `app.asar`，
+  解包目录会变成半旧半新，且 `unpacked-asar.json` 的 size/mtime 是旧值。
 
 ---
 
