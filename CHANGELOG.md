@@ -1,7 +1,21 @@
 # 更新日志
 
-本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 兼容变体**。
+本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 / rc.3 兼容变体**。
 上游以 MIT 发布、作者已宣布停更（1.1.71，`dshTarget: 0.2.0-rc.2`）。
+
+## 未发版 · 2026-10-24 · 对齐 0.2.1-rc.3 声明
+
+补丁表**零改动**，只把声明与文档对齐 rc.3。详细证据见 `COMPAT-0.2.1.md` 的
+「0.2.1-rc.3 实测记录」一节。
+
+- `dshTarget`：`0.2.1-rc.2` → `0.2.1-rc.3`
+- `description`：兼容变体口径改到 rc.3
+- README 中英两版的宿主版本描述改为「rc.2 / rc.3」
+
+**为什么 version 不动**：`reapply.js` 的 `stampMatches()` 用 `pluginVersion()`
+（读 package.json 的 version）比对 `applied.json`。改 version 会让版本戳对不上，
+下次启动判定「需要重打补丁」→ 可能触发 reapply + 重启。
+本次只是声明对齐，不值得为此让宿主重启一次。
 
 ## 1.1.82-dsh · 2026-10-24
 
