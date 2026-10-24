@@ -5,6 +5,34 @@
 
 ## 1.1.83-dsh · 2026-10-24 · 对齐 0.2.1-rc.3 声明
 
+### 修 hostFs 缺 closeSync：备份机制一直是坏的
+
+`lib/extract-asar.js` 的 `HOST_SYNC` 白名单有 `openSync`，**没有 `closeSync`**。
+`backupAll()` 用 `fs.openSync(bak,"wx")` 建占位、再 `fs.closeSync(fd)` 关闭，
+而这里 `fs` 就是 `hostFs`，于是 `closeSync` 是 `undefined` → `TypeError` 被
+`catch { /* ignore */ }` 吞掉 → **占位句柄始终没关**。
+
+Windows 上 rename 覆盖一个仍被本进程持有的句柄会失败：
+
+    Error: EPERM: operation not permitted, rename '...index.js.dshpurge.bak.<pid>.<ts>.copytmp'
+                                      -> '...index.js.dshpurge.bak'
+
+后果：**53 个目标文件全部备份失败**，`.dshpurge.bak` 一个都没生成；
+而 `revertAll()` 在「没有 bak」时按 #41 的设计跳过、不删目标，
+所以回滚永久失效，状态面板只显示「备份: 无」，**没有任何报错**。
+
+修法：白名单补 `"closeSync"`。
+
+验证：修复前 `hostFs.closeSync === undefined`；不关句柄 rename → `EPERM`（与线上一致），关句柄 → 成功；修复后 `backupAll()` 返回 `made: 53, errors: 0`，大小全部一致。
+
+### 顺带修正脏备份
+
+修复后首次跑 `backupAll()` 时补丁已打在宿主上，bak 存的是**打完补丁的版本**。
+这种伪备份比没有更危险——`revertAll()` 会照它还原，等于没还原。
+已用 `app.asar.bak` 的官方原文逐个覆盖，现在 **53 个 bak 全部等于 asar 原文**。
+
+### 声明对齐
+
 补丁表**零改动**，只把声明与文档对齐 rc.3。详细证据见 `COMPAT-0.2.1.md` 的
 「0.2.1-rc.3 实测记录」一节。
 
