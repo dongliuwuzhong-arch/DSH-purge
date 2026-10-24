@@ -3,7 +3,7 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 / rc.3 兼容变体**。
 上游以 MIT 发布、作者已宣布停更（1.1.71，`dshTarget: 0.2.0-rc.2`）。
 
-## 未发版 · 2026-10-24 · 对齐 0.2.1-rc.3 声明
+## 1.1.83-dsh · 2026-10-24 · 对齐 0.2.1-rc.3 声明
 
 补丁表**零改动**，只把声明与文档对齐 rc.3。详细证据见 `COMPAT-0.2.1.md` 的
 「0.2.1-rc.3 实测记录」一节。
