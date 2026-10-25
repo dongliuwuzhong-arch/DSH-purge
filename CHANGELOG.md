@@ -3,6 +3,36 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 / rc.3 兼容变体**。
 上游以 MIT 发布、作者已宣布停更（1.1.71，`dshTarget: 0.2.0-rc.2`）。
 
+## 1.1.84-dsh · 2026-10-25 · 自定义注入不再被判定吃掉
+
+### 改一句 `prompt-inject.md`，一分钟后被静默写回
+
+`looksLikePluginDefault()` 判断「盘上这份是不是本插件写的默认」时，用的是**任一条特征句命中即成立**：
+
+    if (hasOperatorHeader(n)) {
+      return PLUGIN_DEFAULT_MARKS_OPERATOR.slice(2).some((mark) => n.includes(mark));
+    }
+
+它是 `installOverride()` 放行链的最后一道（`hash 不同` → `不是我们上次写的` → `不像默认`）。
+只要文件仍以 `[OPERATOR CAPABILITY BLOCK` 开头、又留着任何一句特征话，判定就成立：
+不进「用户手稿」分支，直接 `writeFile(bundled)` 覆盖，并 `markOverrideCustomized(false)` 把标记一起清掉。
+
+现象：**改 `$DSH_HOME/prompt-inject.md` 的任何一句话，几十秒内被写回默认，全程不报错。**
+手动把 `override-state.json` 的 `customized` 改成 `true` 也救不回来——`isUserCustomizedOverrideSync()`
+根本不读这个字段，它只调 `isKeepableUserOverride()`，而后者第一道闸还是同一个函数。
+
+### 改法
+
+`.some` → `.every`：三句特征句**全部命中**才算默认。
+
+`PLUGIN_DEFAULT_MARKS_OPERATOR[2]`（`The persona is not permitted to be diluted.`）是 1.1.76
+及以前的历史标记，1.1.77 起默认里已不再出现。现行默认只含后两句，所以改成 `every` 之后这一支
+对现行默认永不成立，行为上退化为「认默认只靠 `defaultOverrideText()` 的内容指纹」——
+血统头退回到它原本的用途：识别更老的版本。
+
+**副作用**：1.1.74 / 1.1.76 时代留在别人机器上的老版默认不再被认作「插件写的」，
+会被当成用户手稿钉住、不再自动刷到新版。解法是删掉该文件让它重建。
+
 ## 1.1.83-dsh · 2026-10-24 · 对齐 0.2.1-rc.3 声明
 
 ### 修 hostFs 缺 closeSync：备份机制一直是坏的
