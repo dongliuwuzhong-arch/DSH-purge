@@ -606,6 +606,7 @@ git branch -m master main  # only if you are still on master; on main it fails w
 - Scope is rendered copy, defaults, and runtime logic inside local `@deepseek-ai/*` packages, plus override files and rule sets under the harness home.
 - After an upgrade, unmatched originals show as skipped. Apply still completes, and those files are left unchanged.
 - Third-party plugin *source repos* outside `@deepseek-ai` are left alone (CMD silence may **best-effort** patch installed doctor / market / liangshen / mnemon at runtime).
+- Editing `$DSH_HOME/prompt-inject.md` on builds ≤1.1.83 gets silently reverted within about a minute: the "is this our default" check counted **any single** matching signature line as proof, so a hand-edited copy still looked like ours and `installOverride()` overwrote it, resetting `customized` to false along the way. Fixed in 1.1.84 (`some` → `every`). On an older build, change the first line (`[OPERATOR CAPABILITY BLOCK` → `[OPERATOR CAPABILITY`) to break the lineage check and make your edits stick.
 - Install: **there is no `dsh-purge` package on npm** — `add dsh-purge` returns 404. Use the main.tar.gz URL, `add .` from this repo, or Manual install. The ordinary CLI refuses `--profile desktop`; use the desktop CLI that ships in the install directory.
 
 ---
