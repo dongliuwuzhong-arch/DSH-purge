@@ -190,6 +190,12 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 			"metric.bak.yes": "有备份",
 			"metric.bak.no": "无备份",
 			"metric.bak.hint": "备份",
+			"metric.rt.ok": "已同步",
+			"metric.rt.diff": "差 {n} 个",
+			"metric.rt.hint": "运行副本",
+			"metric.gap.n": "{n} 个",
+			"metric.gap.hint": "备份缺口",
+			"metric.gap.patched": "其中 {n} 个已带补丁痕迹",
 			"table.patch": "项目",
 			"table.status": "状态",
 			"status.applied": "已应用",
@@ -530,6 +536,12 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 			"metric.bak.yes": "Backup",
 			"metric.bak.no": "No backup",
 			"metric.bak.hint": "Backup",
+			"metric.rt.ok": "In sync",
+			"metric.rt.diff": "Differ {n}",
+			"metric.rt.hint": "Runtime copy",
+			"metric.gap.n": "{n}",
+			"metric.gap.hint": "Backup gap",
+			"metric.gap.patched": "{n} of them already patched",
 			"table.patch": "Item",
 			"table.status": "Status",
 			"status.applied": "Applied",
@@ -1836,6 +1848,14 @@ body:not([data-ds-dark-theme]) .dshp-auth-ops button.primary{background:var(--ds
 			if (tally.pending) metricNotes.push(t("metric.pendingShort", { n: tally.pending }));
 			if (tally.unmatched) metricNotes.push(t("metric.unmatchedShort", { n: tally.unmatched }));
 			if (tally.skipped) metricNotes.push(t("metric.skipShort", { n: tally.skipped }));
+			// 运行副本同步、备份缺口：这两个只在真有问题时才占一行，正常的安装看不见它们。
+			const rtInfo = (s && s.runtime_sync) || null;
+			const rtCopies = (rtInfo && Array.isArray(rtInfo.copies)) ? rtInfo.copies : [];
+			const rtDiffs = rtCopies.reduce((acc, c) => acc + (((c && c.diffs) || []).length), 0);
+			const rtOk = Boolean(rtInfo && rtInfo.ok);
+			const gapInfo = (s && s.backup_gap) || null;
+			const gapMissing = (gapInfo && Array.isArray(gapInfo.missing)) ? gapInfo.missing : [];
+			const gapPatched = (gapInfo && Array.isArray(gapInfo.patched)) ? gapInfo.patched : [];
 
 			const versions = (updateInfo && updateInfo.versions) || [];
 			const channelNow = (updateInfo && updateInfo.channel) || channel || "stable";
@@ -1936,6 +1956,14 @@ body:not([data-ds-dark-theme]) .dshp-auth-ops button.primary{background:var(--ds
 						h("b", null, s.has_backup ? t("metric.bak.yes") : t("metric.bak.no")),
 						h("span", null, t("metric.bak.hint")),
 					),
+					rtCopies.length ? h("div", { className: "dshp-metric" },
+						h("b", null, rtOk ? t("metric.rt.ok") : t("metric.rt.diff", { n: rtDiffs })),
+						h("span", null, t("metric.rt.hint")),
+					) : null,
+					gapMissing.length ? h("div", { className: "dshp-metric" },
+						h("b", null, t("metric.gap.n", { n: gapMissing.length })),
+						h("span", null, gapPatched.length ? t("metric.gap.hint") + " · " + t("metric.gap.patched", { n: gapPatched.length }) : t("metric.gap.hint")),
+					) : null,
 				) : h("div", { className: "dshp-metrics" },
 					h("div", { className: "dshp-metric" }, h("div", { className: "dshp-skel" }), h("div", { className: "dshp-skel", style: { width: "40%" } })),
 					h("div", { className: "dshp-metric" }, h("div", { className: "dshp-skel" }), h("div", { className: "dshp-skel", style: { width: "40%" } })),
