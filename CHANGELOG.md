@@ -23,6 +23,11 @@
 - `groupPatchesForDisplay()` 也按面丢行，所以分组合计也不同（web 面 `60`、桌面面 `77`）。
 - **两套数字只在同一面内可比。** 想让命令行按桌面口径说话：`DSH_SURFACE=desktop DSH_BASE="C:/Software/DSH/resources/app/dsh/node_modules/@deepseek-ai"`。
 
+### 记账：桌面面那 4 个备份缺口查过了，原件拿不到
+- 缺口 4 个：`resources/app/lib/main.js`，以及 `@earendil-works/pi-ai/dist/api/` 下的 `openai-completions.js` / `openai-responses-shared.js` / `anthropic-messages.js`。
+- 试过拿 npm 的 `@earendil-works/pi-ai@1.1.0`（随包 `package.json` 里就是这个版本）当原件：**不行**。随包那份是 DSH 构建裁过的（`.lazy.js` 变体 64 → 16），而且 `openai-completions.js` 里 `block.arguments = parseStreamingJson(block.partialArgs);` 这行在 npm 版里还在、随包那份已经没了，补丁表里并**没有**对应条目 —— 说明它随包就长那样。
+- 拿 npm 版当 bak 等于造一份「看着是原件、其实是另一个构建」的备份，正是 1.1.86 修掉的那种假货。已删掉试写的三份，缺口照旧留着。
+- 这 4 个只能用官方安装包里的 `resources/app.asar` 补，而本机那份解包后已被删除，没有副本。状态面板会一直把它们列在「备份缺口」里。
 补丁表 83 条一条没动。
 
 ## 1.1.86-dsh · 2026-10-27 · 不再造「假备份」，缺口直接说出来
