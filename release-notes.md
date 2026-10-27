@@ -1,3 +1,33 @@
+# 1.1.90-dsh
+
+## 中文
+
+- 版本 **1.1.90-dsh**，目标宿主 **0.2.1-rc.3**。**补丁表 83 条一条没动**。这一版只做两件事：把「空操作」从「可疑备份」里摘出去，以及让写文件自己等宿主松手。
+
+### 修了什么
+
+- `backupGap()` 多返回一组 `noop`：补丁对这个文件**本来就是空操作**时（原文里根本没有它的 pattern），bak == 现网是正常的，不再报成可疑备份。判据是现场把补丁跑一遍看有没有改动，不认宿主版本号。
+- `revertAll()` 同口径分档：空操作的文件进 `noop`，不再混进 `unrevertable` 那条「回滚不生效」的告警里。
+- 状态面板 / `purge_status` / 命令行 / `/dsh-purge/status` 都显示「空操作 N」。
+- rename 撞上宿主占用（`EPERM / EBUSY / EACCES`）时退避重试 20/60/150ms，仍失败才报错，并直接说清「退出宿主后重试」。以前一次 `EPERM` 就让整次 apply 记一条 `write_error`。
+- 新增 `test/judge.test.mjs` 六条单元测试，CI 跑 `node --test`。其中一条专门盯 1.1.89 那个坑：markers 恰好是改前原话时，干净原文不能判成「已打过」。
+
+### 实测
+
+- 0.2.1-rc.3 上 `backupGap()`：missing 0 / patched 0 / suspect 0 / **noop 3**。
+- 单元测试 6/6、`assert-patches` 通过。
+
+## English
+
+- Version **1.1.90-dsh**, targets host **0.2.1-rc.3**. **The patch table stays at 83 entries.** Two things only: no-op patches are no longer reported as suspicious backups, and file writes now wait for the host to let go.
+
+### Fixed
+
+- `backupGap()` returns a fourth bucket, `noop`: when the patches do not modify the file at all (its pattern is not in the source), `bak == live` is normal and no longer reported as suspicious.
+- `revertAll()` classifies the same way, so those files stop appearing in the `unrevertable` warning.
+- Status panel, `purge_status`, the CLI and `/dsh-purge/status` all show the no-op count.
+- Renames that hit a host-held file (`EPERM / EBUSY / EACCES`) retry with 20/60/150ms backoff before failing, and the error says to quit the host and retry.
+- New `test/judge.test.mjs` (6 cases) runs in CI via `node --test`. One of them is the 1.1.89 regression: markers that are literally the pre-patch text must not make a clean file look patched.
 # 1.1.89-dsh
 
 ## 中文
