@@ -1,3 +1,41 @@
+# 1.1.89-dsh
+
+## 中文
+
+- 版本 **1.1.89-dsh**，目标宿主 **0.2.1-rc.3**。**补丁表 83 条一条没动**。这一版补上「假备份」的真凶：不是 `backupAll`，是 `refreshStaleBaksForUpgrade()`。
+
+### 修了什么
+
+- 判「目标是否已打过补丁」改成三级：带 `dsh-purge` 字样 → 打过；这个 key 上还有任何一条原文在场 → 干净基线；原文都没了且 markers 命中或 replace 文本在场 → 打过。本表有一批补丁改的是目标字符串本身（`READ_MAX_LINE_LENGTH = 1e4` 这类），文件里没有 `dsh-purge` 字样，旧的 needle 判据对 103 次检查里的 17 次完全失明。
+- 只查 markers 又会反过来出假阳性（#2/#3 的 markers 就是改前原话），把干净文件判成「已打过」而拒建备份 —— 所以第 2 级「原文还在就一票否决」是必须的。
+- `backupAll()` 与 `refreshStaleBaksForUpgrade()` 共用新判据：前者不再建假备份，后者不再把 bak 覆盖成打完补丁的版本（当年 10 个文件就是这么变假的）。
+- `backupGap()` 新增 `suspect`（bak 与现文件一致、文件又确实带补丁痕迹），状态面板单列「可疑备份」；`revertAll()` 把这类文件从 `skipped` 拆到 `unrevertable`，命令行 / `purge_revert` / Web 三处回滚都会报出来。
+- `scripts/assert-patches.mjs`：CHANGELOG 里找不到「补丁表 N 条」时直接失败，不再静默放行。
+
+### 怎么验的
+
+- 10 个假原件里 8 个用官方安装包里的 asar 原件修好；剩 2 个是 #50 的空操作文件（asar 原件与现网逐字节相同）。
+- 全链路循环：`revertAll` → `backupAll`（refused 0）→ `applyPatches(ALL_PATCHES)`，57 个目标文件逐字节回到循环前（mismatch=0）；循环后 `patchStatus` 71/77 applied、0 pending，`backupGap` missing 0。
+- `tool-fs` 往返：bak → 现网 → 重打 #22/#36 → 字节回到 49419（`ROUNDTRIP OK`）；重打之后 10 份 bak 仍是原件（`pristine_baks=10/10`）。
+- 桌面面 `dsh-purge --status`：`补丁 71/77 已清洗, 0 待清洗, 6 跳过`，`备份缺口` 消失，`可疑备份 3 个`（全是 #50 的空操作文件）。
+
+## English
+
+- **1.1.89-dsh**, target host **0.2.1-rc.3**. Patch table untouched at 83 entries. This release names the real culprit behind the fake backups: `refreshStaleBaksForUpgrade()`, not `backupAll()`.
+
+### Changed
+
+- "Is this file already patched?" is now a three-step test: our own `dsh-purge` marker wins; otherwise, if any original pattern for that file key is still present the file is a clean baseline; otherwise markers or replacement text count as evidence. Several patches rewrite the target string itself, so the old marker-only check was blind to 17 of 103 file checks.
+- Marker-only detection produced the opposite error (#2/#3 markers are the pre-patch wording) and made `backupAll` refuse to back up clean files — hence the hard veto on "original still present".
+- `backupAll()` and `refreshStaleBaksForUpgrade()` share that judgement. The former stops creating fake originals; the latter stops overwriting a good `.dshpurge.bak` with the already-patched file — that overwrite is how ten backups went bad.
+- `backupGap()` gains `suspect` and the status panel lists it; `revertAll()` reports those files as `unrevertable` instead of burying them in `skipped`, across CLI, `purge_revert` and the web route.
+- `scripts/assert-patches.mjs` now fails when `CHANGELOG.md` no longer states the patch count.
+
+### Verified
+
+- 8 of the 10 fake originals were replaced with pristine bytes from the official installer's `resources/app.asar`; the remaining 2 are no-op patches (#50) whose pristine bytes equal the live bytes.
+- Full cycle `revertAll` → `backupAll` (0 refused) → `applyPatches(ALL_PATCHES)` reproduces all 57 target files byte for byte; afterwards `patchStatus` is 71/77 applied with 0 pending and no backup gap.
+- `tool-fs` round trip: restore from bak, re-apply #22/#36, bytes return to 49419 (`ROUNDTRIP OK`). After that apply, all ten baks are still pristine (`pristine_baks=10/10`).
 # 1.1.88-dsh
 
 ## 中文

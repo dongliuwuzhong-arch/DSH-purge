@@ -39,7 +39,11 @@ console.log(parts.join(" "));
 if (dupes.length) fail("补丁 id 重复：" + dupes.join(", "));
 if (nameless.length) fail("有 " + nameless.length + " 条补丁没有 name");
 if (fileless.length) fail("有 " + fileless.length + " 条补丁没有 file");
-if (declared !== null && declared !== patches.length) {
+if (declared === null) {
+  // 找不到声明时不许静默放行：这条断言的全部意义就是「文档和表对得上」，
+  // 文档里没那句话，断言等于没写。
+  fail("CHANGELOG.md 里找不到「补丁表 N 条」这句话；它是对表数的唯一声明，被删掉就等于没人核对");
+} else if (declared !== patches.length) {
   fail("CHANGELOG 写的是 " + declared + " 条，实际 " + patches.length + " 条 —— 改表之后忘了改文档，或反过来");
 }
 if (!process.exitCode) console.log("✓ 补丁表自检通过");
