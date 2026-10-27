@@ -3,8 +3,8 @@
 **dsh-purge 的 0.2.1-rc.2 / rc.3 兼容变体**
 
 本仓库：https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2 （公开，默认分支 `main`）
-上游：[YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge)（MIT，作者已宣布暂停维护）
-本仓库是基于上游 `master`（1.1.71）的**兼容性修复分支**，当前版本 `1.1.81-dsh`。
+上游：[YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge)（MIT，仍在发版，已到 1.1.81）
+本仓库分叉自上游 `1.1.71`、跟的是 **0.2.1-rc.3**，当前版本 `1.1.95-dsh`。
 
 ---
 
@@ -456,6 +456,6 @@ curl -sL https://api.github.com/repos/dongliuwuzhong-arch/dsh-purge-021rc2/relea
 本分支同样以 **MIT** 协议发布，遵循上游署名要求：
 
 - 上游项目：**dsh-purge** by [YuJunZhiXue](https://github.com/YuJunZhiXue/dsh-purge)
-- 本分支仅做兼容性修复与演练台移除，破甲提示词与宿主 patch 机制均为上游作者成果。
+- 本分支仅做兼容性修复、演练台移除与结构整理，破甲提示词与宿主 patch 机制均为上游作者成果。
 
 原 `LICENSE` 与 `README` / `README.zh-CN.md` 原样保留。
