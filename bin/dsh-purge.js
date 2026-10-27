@@ -22,13 +22,18 @@ function printStatus(state) {
   }
   out.push(`  shim 目录      ${state.shim_dir || "未定位 / not found"}`);
   out.push(`  备份 / backup  ${state.has_backup ? "有 / yes" : "无 / no"}`);
-  const gap = state.backup_gap || { missing: [], patched: [] };
+  const gap = state.backup_gap || { missing: [], patched: [], suspect: [] };
   if (gap.missing && gap.missing.length) {
     out.push(`  备份缺口      ${gap.missing.length} 个目标没有 .dshpurge.bak`);
     for (const gfp of gap.missing.slice(0, 5)) {
       out.push(`    · ${gfp}${gap.patched && gap.patched.includes(gfp) ? "  （已带补丁痕迹：原件要另外找回）" : ""}`);
     }
     if (gap.missing.length > 5) out.push(`    · …还有 ${gap.missing.length - 5} 个`);
+  }
+  if (gap.suspect && gap.suspect.length) {
+    out.push(`  可疑备份      ${gap.suspect.length} 个备份和现文件一模一样：回滚对它们不生效`);
+    for (const sfp of gap.suspect.slice(0, 5)) out.push(`    · ${sfp}  （备份是补丁之后建的，或补丁本来就没改这个文件）`);
+    if (gap.suspect.length > 5) out.push(`    · …还有 ${gap.suspect.length - 5} 个`);
   }
   out.push(`  注入文件       ${state.override_path}`);
   out.push(`  注入状态       ${state.override_status}`);
@@ -122,13 +127,18 @@ async function main() {
     console.log("全部完成 / All done。重启 dsh 生效 / Restart dsh to take effect.");
   } else if (mode === "--revert") {
     if (state.ai_base || core.enumeratePatchAiBases().length) {
-      const { reverted, noBackup = [], errors } = await core.revertAllHosts();
+      const { reverted, noBackup = [], unrevertable = [], errors } = await core.revertAllHosts();
       for (const p of reverted) console.log(`  ✓ 已还原 / Reverted ${p}`);
       for (const [p, e] of errors) console.log(`  ⚠ 还原失败 ${p}: ${e}`);
       if (noBackup.length) {
         console.log(`  ⚠ ${noBackup.length} 个目标没有备份，还带着补丁 / no backup, still patched`);
         for (const p of noBackup.slice(0, 5)) console.log(`      · ${p}`);
         if (noBackup.length > 5) console.log(`      · …还有 ${noBackup.length - 5} 个`);
+      }
+      if (unrevertable.length) {
+        console.log(`  ⚠ ${unrevertable.length} 个目标回滚不生效：备份与现文件一模一样 / backup identical to live, revert is a no-op`);
+        for (const p of unrevertable.slice(0, 5)) console.log(`      · ${p}`);
+        if (unrevertable.length > 5) console.log(`      · …还有 ${unrevertable.length - 5} 个`);
       }
       if (reverted.length === 0) console.log("  - 没有补丁备份可还原 / no patch backup");
     }

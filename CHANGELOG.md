@@ -3,6 +3,46 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 / rc.3 兼容变体**。
 上游以 MIT 发布、作者已宣布停更（1.1.71，`dshTarget: 0.2.0-rc.2`）。
 
+## 1.1.89-dsh · 2026-10-27 · 假备份的真凶是 refresh，不是 backupAll
+
+### 问题
+
+- 1.1.86 只在 `backupAll` 里挡「目标已带补丁痕迹就别建 bak」，判据是文件里有没有 `dsh-purge` 那句注释。可本表有一批补丁（#1~#4、#22、#33/#48、#50、#57）改的是**目标字符串本身**，痕迹是 `READ_MAX_LINE_LENGTH = 1e4`、`personaPrefix: ""` 这种改后文本，文件里根本没有 `dsh-purge` 字样。71 条 applied 铺到目标文件上是 103 次检查，其中 17 次落在这类文件上 —— 守卫对它们永远判「没打过补丁」。
+- 真正的凶手是 `refreshStaleBaksForUpgrade()`：它每次 apply 都跑，判据同样是「原文件里有没有 `dsh-purge`」。对上面那 17 个文件，它认为「宿主升级过了、bak 过期了」，然后把 **bak 覆盖成当前这份（已经打过补丁的）文件**。备份就这么变成假原件，`revertAll()` 再按「字节相同」跳过 —— 回滚静默失效。
+- 实测：10 个文件的 bak 是这种假原件，bak 的 mtime 全在补丁之后（现网 `2026-10-24T14:23~14:24`，bak `15:15` / `15:44`）。
+
+### 判据：三级，顺序不能换
+
+`targetLooksPatched(text, key)`：
+
+1. 带 `dsh-purge` 字样 → 打过。这是我们自己贴的注释，最硬的证据。
+2. 这个 key 上**还有任何一条原文（`replacements[].pattern`）在场** → 这是干净基线，没打过。
+3. 原文都没了，且 `markers` 命中、或 `replace` 文本在场 → 打过。
+
+第 2 条是这一版的关键。最初只把「查 needle」换成「查 markers」，结果反过来出假阳性：#2/#3 的 `markers` 就是**改前**的原话，一份干净原文照样能把它们全命中，于是 `backupAll` 把干净文件当成「已打过」拒建 bak —— 备份缺口越攒越多，比假原件更难查。加了原文在场这一票否决之后，误判归零。
+
+### 改法
+
+- `targetFilePairs()` / `patchesByFileKey()` / `patchMarkerHit()` / `originalStillThere()` / `replacementPresent()` / `targetLooksPatched()`：备份、刷新、缺口、回滚四处共用同一套判据，不再各写一份。
+- `backupAll()` 与 `refreshStaleBaksForUpgrade()` 都用它：后者不再把「我们打过的版本」覆盖回 bak，前者不会再建假备份 —— 两道口子一起堵。
+- `backupGap()` 多返 `suspect`：bak 在、但与现文件字节相同、文件又确实带补丁痕迹。状态面板（`purge_status` / `dsh-purge --status`）单列一段「可疑备份」，`purge_status` 里就是 `backup_gap.suspect`。
+- `revertAll()` 把这类文件从 `skipped` 里拆出来，单列 `unrevertable`；`revertAllHosts()` 汇总，命令行 / `purge_revert` / Web 三处回滚都会报出来（最多列 5 条路径）。
+- `scripts/assert-patches.mjs`：CHANGELOG 里找不到「补丁表 N 条」时**报错**，不再静默放行 —— 那句话是对表数的唯一声明，被删掉就等于没人核对。
+
+### 记账：10 个假原件修好 8 个，剩 2 个是空操作
+
+- 原件取官方安装包 `deepseek-harness-0.2.1-rc.3-win-x64.exe` 里的 `resources/app.asar`（182434783 字节）。
+- 8 个换成干净原件：#1/#2/#3 的 `dsh-agent-instructions/lib/index.js`（61746 → 60147 字节）、#4 的四个 `cordis.patch.yml`（web-app 22920 → 22981、headless 1318 → 1379、acp-app 438 → 499、sdk-app 1929 → 1990）、#22 的 `tool-fs/lib/index.js`（49419 → 49445）、#33/#48 的 `tool-bash/lib/index.js`（27958 → 28064）与 `tool-pwsh/lib/index.js`（30748 → 31025）。
+- 剩 2 个（`dsh-session-reference/lib/index.js`、`lib/types/spill.js`）的 asar 原件与现网**逐字节相同** —— #50 在这版构建里没有可替换的原文，补丁本来就是空操作，回滚对它们也是空操作。它们会一直出现在「可疑备份」里，这是已知的假阳性；从 12 个缩到 3 个之后，它不再掩盖真问题。
+
+### 全链路自检
+
+- 循环实验（57 个目标文件，脚本 `_diag/cycle-1189.mjs`）：`revertAll` → reverted 51 / skipped 3 / noBackup 1 / unrevertable 3 / errors 0；`backupAll` → made 51 / **refused 0**；`applyPatches(ALL_PATCHES)` → applied 63 / already 7 / missing_file 6 / skipped 6；**57 个文件逐字节回到循环前（mismatch=0）**。
+- 循环后 `patchStatus` = applied 71 / pending 0 / na 6 / skipped 6，`backupGap` = missing 0 / patched 0 / suspect 3。
+- 往返验证：用 bak 把 `tool-fs` 盖回原件 → 重打 #22/#36 → 字节回到 49419（`ROUNDTRIP OK`）；这次 apply 之后 10 份 bak 全部还是原件（`pristine_baks=10/10`）。
+- 循环里出现过一次 `write_error: EPERM ... rename ... cordis.patch.yml.tmp` —— 宿主进程占着那个文件，重试即成功，最终字节一致。记在这里免得下次误判成补丁坏了。
+
+补丁表 83 条一条没动。
 ## 1.1.88-dsh · 2026-10-27 · 补丁表有人看着了，桌面面 4 个备份缺口补齐
 
 ### 问题
