@@ -1,3 +1,50 @@
+# 1.1.86-dsh
+
+## 中文
+
+- 版本 **1.1.86-dsh**，目标宿主 **0.2.1-rc.3**。**补丁表 83 条一条没动**，这一版只修备份语义与状态显示。
+
+### 备份可能是「打完补丁的那份文件」
+
+`backupAll()` 只在 `.dshpurge.bak` 不存在时建，建之前从不看目标文件里有没有 `dsh-purge` 标记。
+任何一条 bak 缺失（早年 `closeSync` 崩掉留下的那条 liangshen 预设就是），拷下来的就是**已打完补丁的文件**；
+而 `revertAll()` 里 `sameFileBytes(fp, bak)` 一旦相同就直接跳过 —— 看着有备份、其实回滚不掉。
+并且 `applyPatchesAllHosts()` 把返回值整个丢掉，备份失败从来没有声音。
+
+这一版把它变成「明面上的缺口」：
+
+- `backupAll()` 建 bak 前先验目标，命中补丁标记就收进 `refused`，不建文件；
+- 新增 `backupGap(aiBase)`，`purge_status` 有缺口时显示 `✗ 备份缺口 / backup gap` 并列出前 5 条；
+- `applyPatchesAllHosts()` 返回 `backupRefused` / `backupErrors`，CLI 与 `purge_apply` 都会打出来；
+- `optional` 为假的补丁被软跳过时，状态面板行首标记从 `·` 改成 `!`。
+
+### 顺手的清理
+
+- CI 语法检查补上 `lib/runtime-sync.js` 与 `bin/dsh-purge.js`（这两个文件都在包的 files 白名单里、都会真跑）。
+- `lib/index.js` 里 5 个历史孤立 CR 清掉，`git ls-files --eol` 不再报 `mixed`。
+
+## English
+
+- Version **1.1.86-dsh**, target host **0.2.1-rc.3**. **Patch table unchanged (83 entries)**; this release only fixes backup semantics and status reporting.
+
+### A backup could be the already-patched file
+
+`backupAll()` only creates `.dshpurge.bak` when it is missing, and never checks whether the target already carries
+the `dsh-purge` marker. Any missing backup therefore captures the **patched** file, and `revertAll()` skips it
+because `sameFileBytes(fp, bak)` matches — a backup that exists but can never restore anything. On top of that,
+`applyPatchesAllHosts()` discarded the function result entirely, so backup errors stayed silent.
+
+This release turns that into a visible gap:
+
+- `backupAll()` verifies the target first and collects marker-carrying files in `refused` instead of writing a fake backup;
+- new `backupGap(aiBase)`; `purge_status` prints `backup gap` with the first five paths;
+- `applyPatchesAllHosts()` returns `backupRefused` / `backupErrors`, surfaced by the CLI and `purge_apply`;
+- patches with `optional: false` that get soft-skipped are marked `!` instead of `·`.
+
+### Also cleaned up
+
+- CI syntax check now covers `lib/runtime-sync.js` and `bin/dsh-purge.js`.
+- Removed the five stray CR bytes in `lib/index.js`, so `git ls-files --eol` no longer reports `mixed`.
 # 1.1.85-dsh
 
 ## 中文
