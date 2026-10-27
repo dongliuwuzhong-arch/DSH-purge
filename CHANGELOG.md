@@ -34,6 +34,10 @@
 `bin/dsh-purge.js` 加 `--sync`（可配 `--prune`）；`package.json` 加
 `sync-runtime` / `sync-runtime:check` 两个 npm script。
 
+自更新走的是 `lib/update.js` 的 `COPY_NAMES` 与 `overlayFromZip()`：清单里补了 `scripts`，
+并把 `scripts` 挪进「先删再拷」那一档（和 `lib`/`docs`/`bin` 一样）。
+只 `cp` 的话，上一版留下、这一版删掉的脚本会一直躺在运行副本里，而 `--apply` 也不认识它们。
+
 ### 顺带：行尾统一
 
 新增 `.gitattributes`：`* text=auto eol=lf` + 图片/压缩包等显式 `binary`。
