@@ -3,6 +3,30 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 / rc.3 兼容变体**。
 上游以 MIT 发布、作者已宣布停更（1.1.71，`dshTarget: 0.2.0-rc.2`）。
 
+## 1.1.86-dsh · 2026-10-27 · 不再造「假备份」，缺口直接说出来
+
+### 问题：bak 可能是「打完补丁的那份文件」
+
+`backupAll()` 只在 `.dshpurge.bak` 不存在时建，建之前从不看目标文件里有没有 `dsh-purge` 标记。
+于是任何一条 bak 缺失（例如早年 `closeSync` 崩掉留下的那条 liangshen 预设）都会把**已经打完补丁的文件**
+当成原件备份下来；`revertAll()` 里 `sameFileBytes(fp, bak)` 一旦相同就 `continue`，
+结果是看着有备份、其实永远回滚不掉。更糟的是 `applyPatchesAllHosts()` 把这个函数的返回值整个丢掉，
+`errors` 从来没人看，apply 一路绿灯。
+
+### 改法
+
+- `backupAll()`：建 bak 前先读目标，命中 `DSH_PURGE_MARKER_NEEDLE` 就收进 `refused`、不建文件 ——
+  宁可留一个明面上的缺口，也不要一份假原文。返回值多 `refused`。
+- 新增 `backupGap(aiBase)`：列出「有目标文件却没有 bak」的路径，并标出其中已带补丁痕迹的。
+- `gatherState()` 多一个 `backup_gap` 字段（30 → 31 个字段）。
+- `applyPatchesAllHosts()` 返回值多 `backupRefused` / `backupErrors`；`--apply` 与 `purge_apply` 会把缺口打出来。
+- `purge_status`：有缺口时显示 `✗ 备份缺口 / backup gap`，列出前 5 条，带补丁痕迹的标注「原件要另外找回」；
+  `optional` 为假的补丁若被软跳过，行首标记从 `·` 改成 `!`。
+- CI 的语法检查补上 `lib/runtime-sync.js` 与 `bin/dsh-purge.js`。
+- `lib/index.js` 里 5 个历史孤立 CR 清掉，`git ls-files --eol` 不再报 mixed。
+
+补丁表 83 条一条没动。
+
 ## 1.1.85-dsh · 2026-10-27 · 源码与运行副本终于有了同步手段
 
 ### 问题：改了 `plugins\dsh-purge`，跑起来的还是旧的

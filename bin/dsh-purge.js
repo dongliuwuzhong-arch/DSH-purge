@@ -22,6 +22,14 @@ function printStatus(state) {
   }
   out.push(`  shim 目录      ${state.shim_dir || "未定位 / not found"}`);
   out.push(`  备份 / backup  ${state.has_backup ? "有 / yes" : "无 / no"}`);
+  const gap = state.backup_gap || { missing: [], patched: [] };
+  if (gap.missing && gap.missing.length) {
+    out.push(`  备份缺口      ${gap.missing.length} 个目标没有 .dshpurge.bak`);
+    for (const gfp of gap.missing.slice(0, 5)) {
+      out.push(`    · ${gfp}${gap.patched && gap.patched.includes(gfp) ? "  （已带补丁痕迹：原件要另外找回）" : ""}`);
+    }
+    if (gap.missing.length > 5) out.push(`    · …还有 ${gap.missing.length - 5} 个`);
+  }
   out.push(`  注入文件       ${state.override_path}`);
   out.push(`  注入状态       ${state.override_status}`);
   if (state.runtime_sync) {
@@ -32,7 +40,7 @@ function printStatus(state) {
     out.push(`  补丁 ${state.patches_applied}/${state.patches_total} 已清洗, ${state.patches_pending} 待清洗, ${state.patches_skipped} 跳过`);
     for (const p of core.ALL_PATCHES) {
       const s = state.patch_status[p.id];
-      const mark = s === "applied" ? "✓" : s === "pending" ? "✗" : "·";
+      const mark = s === "skipped" && !p.optional ? "!" : s === "applied" ? "✓" : s === "pending" ? "✗" : "·";
       out.push(`    ${mark} [#${String(p.id).padEnd(2)}] ${p.name.padEnd(30)} ${p.layer}/${p.layer_en} — ${s}`);
     }
   } else {
@@ -74,7 +82,7 @@ async function main() {
       console.log("[ERROR] 提示词和规则集都是空的，必须先添加提示词");
       process.exit(1);
     }
-    const { hosts, report } = await core.applyPatchesAllHosts(core.ALL_PATCHES, {
+    const { hosts, report, backupRefused = [], backupErrors = [] } = await core.applyPatchesAllHosts(core.ALL_PATCHES, {
       preserveClientBundles: false,
       forApply: true,
     });
@@ -83,6 +91,13 @@ async function main() {
       const m = r.status === "applied" ? "✓ 已清洗" : r.status === "already" ? "- 已是最新" : r.status === "missing_file" ? "⚠ 文件缺失" : `✗ ${r.status}`;
       console.log(`  ${m} patch #${String(r.patch_id).padEnd(2)} ${r.name}`);
     }
+    if (backupRefused.length) {
+      console.log("  ⚠ 备份缺口 / refused: " + backupRefused.length + " 个目标已带补丁痕迹，拒绝建假备份");
+      for (const f of backupRefused.slice(0, 5)) console.log("      · " + f);
+      if (backupRefused.length > 5) console.log("      · …还有 " + (backupRefused.length - 5) + " 个");
+      console.log("      fix: 这些路径要放干净原件（从安装包或旧备份取），否则回滚不掉");
+    }
+    for (const [f, e] of backupErrors) console.log("  ⚠ 备份失败 " + f + ": " + e);
     const flashHost = hosts[0]?.aiBase || state.ai_base;
     const flash = core.silenceCmdFlash(flashHost);
     console.log(`  cmd-flash=${flash.entry} phase-1=${flash.phase1} ok=${flash.ok}`);
