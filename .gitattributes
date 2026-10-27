@@ -1,0 +1,21 @@
+# 行尾统一：仓库里一律 LF，检出也一律 LF。
+#
+# 不加这份文件时，行尾由全局 core.autocrlf=true 决定（见
+# ~/.dsh/dsh-ops/shells/bash/2.56.0.2/etc/gitconfig），于是：
+#   仓库 blob = LF，工作区 = CRLF，profile 里的运行副本 = LF。
+# 同一个文件三处三种字节长度，任何「源码与运行副本是否同步」的比对都会假报不同步，
+# 而 hashOverride() 又靠 normalizeOverride() 把 CR 悄悄归一才没炸 —— 别再靠这个巧合。
+* text=auto eol=lf
+
+# 真二进制：禁止任何 text 归一，否则图片会被 LF 转换弄坏，diff/merge 也会错。
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.svg text eol=lf
+*.zip binary
+*.tgz binary
+*.asar binary
+*.node binary

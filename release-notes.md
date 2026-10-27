@@ -1,3 +1,65 @@
+# 1.1.85-dsh
+
+## 中文
+
+- 版本 **1.1.85-dsh**，目标宿主 **0.2.1-rc.3**。**补丁表 83 条一条没动**，行为与 1.1.84 完全一致，这一版只修交付链路。
+
+### 源码与运行副本是两份文件，中间没人管
+
+四个 profile（default / desktop / headless / pack-test）的 `package.json` 里依赖都写着
+`"dsh-purge": "file:../../plugins/dsh-purge"`，看起来像软链，实际是 pnpm 复制的一份快照：
+`profilePluginDir()` 对 desktop 与 pack-test 都 realpath 到
+`profiles\pack-test\node_modules\dsh-purge`，那是个**真实目录**，不是 Junction。
+
+后果是「明明改了源码、重启也没用」，而状态面板一个字都不提。这次补上：
+
+- `lib/runtime-sync.js`（新）：只依赖 node 内置，不引用 core / update，避免 ESM 环。
+  扫 `<home>/profiles/*/node_modules/dsh-purge`、realpath 去重、逐文件比 sha256，
+  给出 `differs` / `missing_in_runtime` 清单。
+- `scripts/sync-runtime.mjs`（新）：`--apply` 把源码盖过去，`--prune` 删副本里多余文件，`--json` 机器可读；
+  不带参数只报告，不同步时退出码 1。
+- `bin/dsh-purge.js` 加 `--sync`；`package.json` 加 `sync-runtime` / `sync-runtime:check`。
+- `purge_status` / `--status` / 网页状态多一行「运行副本 / runtime」。
+
+写入方式：文本先归一成 LF 再落盘，二进制原样；每个文件写 `.sync-tmp` 再 `renameSync`，
+宿主正读着旧文件时直接截断会读到半截。
+
+### 行尾统一（否则任何比对都在骗人）
+
+新增 `.gitattributes`：`* text=auto eol=lf`，图片与压缩包显式 `binary`。
+此前本机 `core.autocrlf=true`（来自 `~/.dsh/dsh-ops/shells/bash/*/etc/gitconfig`），
+仓库 blob 是 LF、工作区检出是 CRLF、运行副本是 LF —— 同一个文件三种字节长度。
+文本比对还必须丢孤立 CR：`lib/index.js` 的 blob 里有 5 个，git 的 eol 归一化不处理它们。
+
+## English
+
+- Version **1.1.85-dsh**, target host **0.2.1-rc.3**. **Patch table unchanged (83 entries)**; behaviour is identical to 1.1.84. This release only fixes the delivery chain.
+
+### The source tree and the running copy are two different directories
+
+Every profile declares `"dsh-purge": "file:../../plugins/dsh-purge"`, which looks like a symlink but is a
+pnpm snapshot: `profilePluginDir()` realpaths both desktop and pack-test to
+`profiles\pack-test\node_modules\dsh-purge`, a **real directory**, not a junction. Editing the source
+therefore never reaches the code the host loads, and the status panel said nothing about it.
+
+- `lib/runtime-sync.js` (new): node builtins only, so it cannot form an ESM cycle with core / update.
+  Scans `<home>/profiles/*/node_modules/dsh-purge`, de-duplicates by realpath, compares per-file sha256.
+- `scripts/sync-runtime.mjs` (new): `--apply` pushes the source over each copy, `--prune` also removes
+  files the source no longer has, `--json` for machine output. Without flags it only reports, exiting 1
+  when a copy lags.
+- `bin/dsh-purge.js` gained `--sync`; `package.json` gained `sync-runtime` / `sync-runtime:check`.
+- `purge_status` / `--status` / the web status route now print one `runtime` line per copy.
+
+Files are written as LF (binaries byte-for-byte) through a `.sync-tmp` + rename, so the host never reads a
+half-written file.
+
+### Line endings pinned
+
+New `.gitattributes` with `* text=auto eol=lf` and explicit `binary` for images and archives. With the
+machine-global `core.autocrlf=true` the repo blob was LF, the worktree CRLF and the running copy LF — three
+byte lengths for one file. Text comparison also has to drop stray CRs: `lib/index.js` has five in its blob,
+and git's eol normalization leaves them alone.
+
 # 1.1.83-dsh
 
 ## 中文

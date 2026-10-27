@@ -4,7 +4,7 @@
 
 <h1 align="center">⚔️ DeepSeek Harness 网络安全红队工具（dsh-purge）</h1>
 
-<p align="center"><strong>Version 1.1.81-dsh</strong></p>
+<p align="center"><strong>Version 1.1.85-dsh</strong></p>
 
 <p align="center">
   <em>DeepSeek Harness 破甲：让所有模型都能破甲，不同模型可换不同提示词；默认提示词面向国模「小码酱」。Jailbreak for every model — swap prompts per model. 求 Star 收藏 ⭐ 如要二开，请查看署名要求部分</em>
@@ -498,7 +498,16 @@ node --check lib/core.js
 node --check lib/rewind.js
 node --check lib/skills.js
 node --check client.js
+node --check lib/runtime-sync.js
+node --check bin/dsh-purge.js
+node scripts/sync-runtime.mjs          # 只报告；副本落后时退出码 1
 ```
+
+profile 里的 `node_modules/dsh-purge` 是**拷贝**，不是指向 `~/.dsh/plugins/dsh-purge` 的链接：
+pnpm 复制的是当时的快照，改源码不会跟到正在跑的代码上。
+`node scripts/sync-runtime.mjs --apply` 把源码盖到每个 profile 副本（文本按 LF 写入，
+每个文件先写 `.sync-tmp` 再 rename，宿主不会读到半截）；`dsh-purge --sync` 是同一件事的命令行入口，
+状态面板里每个副本会多一行 `运行副本 / runtime`。
 
 ---
 

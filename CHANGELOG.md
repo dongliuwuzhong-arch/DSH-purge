@@ -3,6 +3,53 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 / rc.3 兼容变体**。
 上游以 MIT 发布、作者已宣布停更（1.1.71，`dshTarget: 0.2.0-rc.2`）。
 
+## 1.1.85-dsh · 2026-10-27 · 源码与运行副本终于有了同步手段
+
+### 问题：改了 `plugins\dsh-purge`，跑起来的还是旧的
+
+四个 profile（default / desktop / headless / pack-test）的依赖都写着
+`"dsh-purge": "file:../../plugins/dsh-purge"`，看着像软链，实际是 **pnpm 复制的一份快照**：
+`profilePluginDir()` 对 desktop 与 pack-test 都 realpath 到
+`profiles\pack-test\node_modules\dsh-purge`，那是个**真实目录**，不是 Junction。
+于是改源码不会跟过去，症状是「明明改了、重启也没用」，而面板上一个字都不提。
+
+### 改法
+
+新增 `lib/runtime-sync.js`（只依赖 node 内置，不引用 core/update，避免 ESM 环）：
+
+- `findRuntimeCopies(dshHome)` 扫 `<home>/profiles/*/node_modules/dsh-purge`，realpath 去重；
+  `self` 为真表示该 profile 直连源码，无需同步。
+- `compareRuntime(src, run)` 逐个受管文件比 sha256，返回 `differs` / `missing_in_runtime`。
+- `syncRuntime({prune})` 把源码盖过去：文本先归一成 LF 再写、二进制原样，
+  每个文件写 `.sync-tmp` 再 `renameSync` —— 宿主正读旧文件时直接截断会读到半截。
+- `runtimeSyncLines(report)` 给状态面板用的两行摘要。
+
+新增 `scripts/sync-runtime.mjs`：
+
+    node scripts/sync-runtime.mjs            只报告（不同步则退出码 1）
+    node scripts/sync-runtime.mjs --apply    把源码盖到运行副本
+    node scripts/sync-runtime.mjs --prune    连带删除副本里源码没有的受管文件
+    node scripts/sync-runtime.mjs --json     机器可读
+
+`bin/dsh-purge.js` 加 `--sync`（可配 `--prune`）；`package.json` 加
+`sync-runtime` / `sync-runtime:check` 两个 npm script。
+
+### 顺带：行尾统一
+
+新增 `.gitattributes`：`* text=auto eol=lf` + 图片/压缩包等显式 `binary`。
+此前本机 `core.autocrlf=true`（来自 `~/.dsh/dsh-ops/shells/bash/*/etc/gitconfig`），
+仓库 blob 是 LF、工作区检出是 CRLF、运行副本是 LF —— 同一个文件三种字节长度，
+任何同步比对都会假报不同步。文本比对另需丢孤立 CR（`lib/index.js` 的 blob 里有 5 个，
+git 的 eol 归一化不处理孤立 CR），`normalizeText()` 已一并处理。
+
+### 状态里能看见了
+
+`purge_status` / `dsh-purge --status` 现在多一行「运行副本 / runtime」：
+
+    ✓ 运行副本 / runtime: pack-test 1.1.85-dsh 已同步 C:\Users\...\pack-test\node_modules\dsh-purge
+    ✗ 运行副本 / runtime: pack-test 1.1.84-dsh 与源码差 3 个文件：lib/core.js, lib/index.js ...
+        fix: node scripts/sync-runtime.mjs --apply（源码 1.1.85-dsh / 副本 1.1.84-dsh）
+
 ## 1.1.84-dsh · 2026-10-25 · 自定义注入不再被判定吃掉
 
 ### 改一句 `prompt-inject.md`，一分钟后被静默写回

@@ -2,6 +2,7 @@
 
 import * as core from "../lib/core.js";
 import * as rules from "../lib/rules.js";
+import * as runtimeSync from "../lib/runtime-sync.js";
 
 const args = process.argv.slice(2);
 
@@ -23,6 +24,9 @@ function printStatus(state) {
   out.push(`  备份 / backup  ${state.has_backup ? "有 / yes" : "无 / no"}`);
   out.push(`  注入文件       ${state.override_path}`);
   out.push(`  注入状态       ${state.override_status}`);
+  if (state.runtime_sync) {
+    for (const row of runtimeSync.runtimeSyncLines(state.runtime_sync)) out.push("  " + row);
+  }
   out.push("");
   out.push(`  补丁 ${state.patches_applied}/${core.ALL_PATCHES.length} 已清洗, ${state.patches_pending} 待清洗`);
   for (const p of core.ALL_PATCHES) {
@@ -36,7 +40,7 @@ function printStatus(state) {
 }
 
 async function main() {
-  const mode = args.find((a) => ["--apply", "--revert", "--uninstall", "--status", "--edit", "--help"].includes(a));
+  const mode = args.find((a) => ["--apply", "--revert", "--uninstall", "--status", "--edit", "--sync", "--help"].includes(a));
 
   if (mode === "--help" || args.includes("-h")) {
     console.log(`dsh-purge 用法:
@@ -44,6 +48,7 @@ async function main() {
   dsh-purge --apply      应用全部清洗（提示词+代码+shim+override）
   dsh-purge --revert     回滚还原
   dsh-purge --uninstall  卸载插件（已应用则先还原）
+  dsh-purge --sync       把源码同步到 profile 里的运行副本
   dsh-purge --edit       编辑注入文件 prompt-inject.md
   dsh-purge --help       帮助`);
     return;
@@ -126,6 +131,21 @@ async function main() {
     }
     console.log("");
     console.log("卸载完成。请重启 dsh。");
+  } else if (mode === "--sync") {
+    const result = await runtimeSync.syncRuntime({ prune: args.includes("--prune") });
+    for (const c of result.copies) {
+      if (c.self) {
+        console.log(`  - ${runtimeSync.copyLabel(c)}: self-link，无需同步`);
+        continue;
+      }
+      console.log(`  ${c.errors.length || c.remaining.length ? "⚠" : "✓"} ${runtimeSync.copyLabel(c)}: 拷贝 ${c.copied.length} 个，删除 ${c.removed.length} 个`);
+      for (const rel of c.copied) console.log(`      + ${rel}`);
+      for (const rel of c.removed) console.log(`      - ${rel}`);
+      for (const e of c.errors) console.log(`      [ERROR] ${e}`);
+      for (const rel of c.remaining) console.log(`      ! 仍未同步 ${rel}`);
+    }
+    if (!result.copies.length) console.log("  - 没有 profile 装 dsh-purge，无需同步");
+    if (!result.ok) process.exitCode = 1;
   } else if (mode === "--edit") {
     const r = core.editOverride(state.dsh_home);
     if (!r.ok && r.needCreate) {

@@ -4,7 +4,7 @@
 
 <h1 align="center">⚔️ DeepSeek Harness cybersecurity red-team tool (dsh-purge)</h1>
 
-<p align="center"><strong>Version 1.1.81-dsh</strong></p>
+<p align="center"><strong>Version 1.1.85-dsh</strong></p>
 
 <p align="center">
   <em>DeepSeek Harness jailbreak: every model, swap prompts per model. Default prompt for 小码酱. Please star ⭐ If you build on this, see Attribution required.</em>
@@ -493,7 +493,17 @@ node --check lib/host.js
 node --check lib/rewind.js
 node --check lib/skills.js
 node --check client.js
+node --check lib/runtime-sync.js
+node --check bin/dsh-purge.js
+node scripts/sync-runtime.mjs          # report only; exit 1 when a profile copy lags
 ```
+
+A profile's `node_modules/dsh-purge` is a **copy**, not a link to `~/.dsh/plugins/dsh-purge`:
+pnpm snapshots the directory, so editing the source does not reach the running code.
+`scripts/sync-runtime.mjs --apply` pushes the source over every profile copy (text files are
+normalized to LF, each file is written to `.sync-tmp` and renamed so the host never reads a
+half-written file). `dsh-purge --sync` does the same from the CLI, and the status panel shows
+one `runtime` line per copy.
 
 ---
 
