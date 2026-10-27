@@ -4,7 +4,7 @@
 
 <h1 align="center">⚔️ DeepSeek Harness 网络安全红队工具（dsh-purge）</h1>
 
-<p align="center"><strong>Version 1.1.87-dsh</strong></p>
+<p align="center"><strong>Version 1.1.88-dsh</strong></p>
 
 <p align="center">
   <em>DeepSeek Harness 破甲：让所有模型都能破甲，不同模型可换不同提示词；默认提示词面向国模「小码酱」。Jailbreak for every model — swap prompts per model. 求 Star 收藏 ⭐ 如要二开，请查看署名要求部分</em>
@@ -500,7 +500,9 @@ node --check lib/skills.js
 node --check client.js
 node --check lib/runtime-sync.js
 node --check bin/dsh-purge.js
+node --check scripts/assert-patches.mjs
 node scripts/sync-runtime.mjs          # 只报告；副本落后时退出码 1
+node scripts/assert-patches.mjs        # 补丁表自检：id 唯一、条数与 CHANGELOG 一致
 ```
 
 profile 里的 `node_modules/dsh-purge` 是**拷贝**，不是指向 `~/.dsh/plugins/dsh-purge` 的链接：

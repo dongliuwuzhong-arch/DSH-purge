@@ -29,7 +29,9 @@ jobs:
           node --check lib/runtime-sync.js
           node --check client.js
           node --check bin/dsh-purge.js
+          node --check scripts/assert-patches.mjs
           node --input-type=module -e "import './lib/index.js'"
+          node scripts/assert-patches.mjs
 
       - name: Publish GitHub Release
         env:

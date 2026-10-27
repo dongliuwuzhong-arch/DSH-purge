@@ -4,7 +4,7 @@
 
 <h1 align="center">⚔️ DeepSeek Harness cybersecurity red-team tool (dsh-purge)</h1>
 
-<p align="center"><strong>Version 1.1.87-dsh</strong></p>
+<p align="center"><strong>Version 1.1.88-dsh</strong></p>
 
 <p align="center">
   <em>DeepSeek Harness jailbreak: every model, swap prompts per model. Default prompt for 小码酱. Please star ⭐ If you build on this, see Attribution required.</em>
@@ -495,7 +495,9 @@ node --check lib/skills.js
 node --check client.js
 node --check lib/runtime-sync.js
 node --check bin/dsh-purge.js
+node --check scripts/assert-patches.mjs
 node scripts/sync-runtime.mjs          # report only; exit 1 when a profile copy lags
+node scripts/assert-patches.mjs        # patch table: unique ids, count matches CHANGELOG
 ```
 
 A profile's `node_modules/dsh-purge` is a **copy**, not a link to `~/.dsh/plugins/dsh-purge`:

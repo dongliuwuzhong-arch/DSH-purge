@@ -1,3 +1,32 @@
+# 1.1.88-dsh
+
+## 中文
+
+- 版本 **1.1.88-dsh**，目标宿主 **0.2.1-rc.3**。**补丁表 83 条一条没动**，这一版修「补丁条数没人核」并补上桌面面最后 4 个备份缺口。
+
+### 修了什么
+
+- 新增 `scripts/assert-patches.mjs`：校验补丁 `id` 唯一、`name` / `file` 非空，并把 `CHANGELOG.md` 里「补丁表 N 条」的声明数字与 `ALL_PATCHES.length` 对齐，不一致就退出码 1。CI 里也跑一遍，文档数字跟补丁表脱钩会让发版失败。
+- 桌面面 4 个备份缺口补齐：从官方安装包 `deepseek-harness-0.2.1-rc.3-win-x64.exe`（sha512 与官方 feed 一致）里取出 `resources/app.asar`，解出 `lib/main.js` 与三个 pi-ai 文件，作为干净原件写成 `.dshpurge.bak`。回滚链从「这 4 个回滚不掉」变成可回滚。
+
+### 怎么验的
+
+- 先用原件覆盖现网 → `backupAll()` 建 4 份 bak（`refused` 0 / `errors` 0）→ `applyPatches()` 重打，四个文件哈希与动手前逐字节一致（`ROUNDTRIP OK`）。
+- `backupGap(aiBase)` 由 `missing 4 / patched 3` 归零；桌面面 `dsh-purge --status` 不再显示「备份缺口」。
+
+## English
+
+- **1.1.88-dsh**, target host **0.2.1-rc.3**. Patch table untouched at 83 entries.
+
+### Changed
+
+- New `scripts/assert-patches.mjs`: unique patch ids, non-empty `name` / `file`, and the "补丁表 N 条" figure written in `CHANGELOG.md` must equal `ALL_PATCHES.length` (exit code 1 otherwise). CI runs it, so a stale number now fails the release.
+- The last four desktop-surface backup gaps are closed. Their pristine bytes come from the official `deepseek-harness-0.2.1-rc.3-win-x64.exe` (sha512 matches the vendor feed): `resources/app.asar` yields `lib/main.js` plus the three `@earendil-works/pi-ai/dist/api` files, which are now stored as `.dshpurge.bak`. Revert for those four works again.
+
+### Verified
+
+- Restore pristine → `backupAll()` (4 created, 0 refused, 0 errors) → `applyPatches()` reproduces the previous bytes exactly (`ROUNDTRIP OK`).
+- `backupGap(aiBase)` drops from `missing 4 / patched 3` to zero; the desktop status panel no longer prints the backup-gap block.
 # 1.1.87-dsh
 
 ## 中文

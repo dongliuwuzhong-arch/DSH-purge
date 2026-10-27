@@ -3,6 +3,29 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 / rc.3 兼容变体**。
 上游以 MIT 发布、作者已宣布停更（1.1.71，`dshTarget: 0.2.0-rc.2`）。
 
+## 1.1.88-dsh · 2026-10-27 · 补丁表有人看着了，桌面面 4 个备份缺口补齐
+
+### 问题
+
+- 「补丁表 83 条一条没动」这句话一直是**手写**的。1.1.87 改了备份与回滚逻辑、条目数没动，可这是运气好，不是机制：下一次加补丁，没人保证这个数字跟 `ALL_PATCHES.length` 对得上。
+- 上一节记的「桌面面那 4 个备份缺口，原件拿不到」**下得太早**。官方 feed 里 `0.2.1-rc.3` 的安装包 sha512 跟本机这一版完全一致，它的 `resources/app.asar` 里那 4 个文件就是干净原件 —— 当时只查了本机解包目录和 npm 包，没想到去下安装包。
+
+### 改法
+
+- 新增 `scripts/assert-patches.mjs`（含 `npm run assert-patches`）：校验 `ALL_PATCHES` 的 `id` 唯一、`name` / `file` 非空，并把 `CHANGELOG.md` 里「补丁表 N 条」的**声明数字**与实际条数对齐。任一不符即以退出码 1 结束。
+- CI 的 syntax step 增加 `node --check scripts/assert-patches.mjs` 与 `node scripts/assert-patches.mjs` —— 以后文档数字和补丁表脱钩，发版直接失败。
+- README 两语的「本地校验」块各加一行。
+
+### 记账：桌面面 4 个备份缺口已补，回滚链修好
+
+- 原件来源：`https://download.deepseek.com/dsh-desk/bin/win-x64/deepseek-harness-0.2.1-rc.3-win-x64.exe`（289415960 字节，sha512 `q5IGr2Bf+TvvCpagHj49Ypn…` 与官方 feed `nightly.yml` 一致）。用 7-Zip 25.01 解 NSIS 出 `resources/app.asar`（182434783 字节），再按 asar 索引解出 `lib/main.js` 与 `@earendil-works/pi-ai/dist/api/` 三个文件。
+- 判定这份 asar 就是本机这一版的依据：`dsh/package.json`（17168 字节）与 `pi-ai/package.json`（2086 字节）跟现网**逐字节相同**；而 4 个目标文件跟现网差得正好是补丁那几段（现网带 `dsh-purge` 标记，asar 里 0 个）。
+- 顺序：先用原件覆盖现网目标 → 跑 `backupAll(aiBase)` 建 4 份 bak（`made` 4 / `refused` 0 / `errors` 0）→ 再 `applyPatches(aiBase, ALL_PATCHES)` 重新打补丁。
+- 往返校验：`main.js` `0f3abde5b32e`、`openai-completions.js` `d3c8889b2d5c`、`openai-responses-shared.js` `21fb0ec92789`、`anthropic-messages.js` `e9beed590c06` —— 动手前与重打之后**逐字节一致**（脚本打印 `ROUNDTRIP OK`）。`backupGap(aiBase)` 从 `missing 4 / patched 3` 归零，桌面面状态面板不再出现「备份缺口」那一段。
+- bak 内容核过：4 份都不含 `dsh-purge` 标记（`main.js` 516716 字节、`openai-completions.js` 64580、`openai-responses-shared.js` 32122、`anthropic-messages.js` 58193）。其中 `openai-responses-shared.js` 与现网字节相同 —— 补丁本来就没改它，这种「bak == 现文件」是正常的（`revertAll` 按内容相同跳过），跟 1.1.86 防的那种「拿打完补丁的文件当备份」不是一回事。
+- 教训写在这里：判断「原件拿不到」之前，先把「官方安装包」这条路走完。sha512 一比就知道是不是同一版，比猜构建差异便宜得多。
+
+补丁表 83 条一条没动。
 ## 1.1.87-dsh · 2026-10-27 · 回滚之后别再说「都干净了」
 
 ### 问题
