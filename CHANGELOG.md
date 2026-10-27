@@ -3,6 +3,27 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 / rc.3 兼容变体**。
 上游以 MIT 发布、作者已宣布停更（1.1.71，`dshTarget: 0.2.0-rc.2`）。
 
+## 1.1.90-dsh · 2026-10-27 · 空操作不再算可疑，写文件会等宿主松手
+
+### 问题
+
+- `backupGap()` 把「bak 与现文件字节相同」一律报成**可疑备份**。可 #50 那三条 session-reference 目标在这版宿主上本来就是空操作（原文里根本没有它的 pattern），bak == 现网属于正常。结果是状态面板常年挂 3 条 ✗，看一眼就学会无视它 —— 真出现假原件的时候反而没人看得见。
+- 写文件那一层对占用零容忍：宿主进程开着 `cordis.patch.yml` 时 `rename` 抛 `EPERM`，一次就报 apply 失败、`write_error` 进报告。实测里重试一次就成功、字节一致。
+
+### 改法
+
+- `lib/core.js` 新增 `keyIsNoop(text, key, fp)`：把这段文本按当前面适用的补丁逐条跑 `applyReplacementsToText`，**一条都没改动**就算空操作。这是现场算出来的事实，不依赖「我知道宿主是哪版」。
+- `backupGap()` 多返回一组 `noop`：`suspect` 里剩下的就一定是「bak 是补丁之后建的」这种真问题。`revertAll()` 同口径分档，空操作的不再混进 `unrevertable`。
+- 状态面板（`renderStatus`）、`purge_status`、`bin/dsh-purge.js --status`、`/dsh-purge/status` 路由四处都显示「空操作 N」，用 `·` 而不是 `✗`。
+- `atomicWriteSync` / `atomicWriteFile` / `atomicCopyFile` 的 rename 改走 `renameSyncWithRetry` / `renameWithRetry`：`EPERM / EBUSY / EACCES / ENOTEMPTY` 退避重试 20/60/150ms，仍失败时报「宿主进程可能正占用该文件，退出 DeepSeek Harness 后重试」/「file busy, quit the host and retry」。
+- 新增 `test/judge.test.mjs`（6 条，`node --test`）：补丁 id 唯一、干净原文不被 markers 骗、打完补丁可判、空操作可判、CRLF/LF 哈希相同、同步状态行四种形态。CI 增加 `node --test "test/**/*.test.mjs"`。
+- `targetLooksPatched()` / `keyIsNoop()` 导出来给测试用，判据本身一行没改。
+- 补丁表 83 条没动。
+
+### 实测
+
+- `backupGap()` 在 0.2.1-rc.3 上：missing 0 / patched 0 / **suspect 0 / noop 3**（正是 session-reference 那三个）。
+- 单元测试 6/6 通过；`node scripts/assert-patches.mjs` → `patches=83 unique_ids=ok changelog=83`。
 ## 1.1.89-dsh · 2026-10-27 · 假备份的真凶是 refresh，不是 backupAll
 
 ### 问题
