@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
 import {
   SURFACES,
@@ -14,11 +17,27 @@ const ELECTRON = { electron: "30.0.0" };
 
 test("官方桌面端照旧判 desktop", () => {
   assert.equal(detectSurface({ execPath: "C:/Software/DSH/DSH Desktop.exe", env: {}, versions: ELECTRON, argv: [] }), "desktop");
-  assert.equal(
-    detectSurface({ execPath: "/usr/bin/node", resourcesPath: "C:/Software/DSH/resources", env: {}, versions: ELECTRON, argv: [] }),
-    "desktop",
-    "resources 目录下真有 app/dsh 也该判 desktop",
-  );
+
+  // resources 目录下有 app/dsh 才判 desktop —— 用临时目录造，不依赖跑测试的机器上装没装宿主。
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "dsh-surface-"));
+  try {
+    const resources = path.join(tmp, "resources");
+    fs.mkdirSync(path.join(resources, "app", "dsh"), { recursive: true });
+    assert.equal(
+      detectSurface({ execPath: "/usr/bin/node", resourcesPath: resources, env: {}, versions: ELECTRON, argv: [] }),
+      "desktop",
+      "resources 目录下真有 app/dsh 也该判 desktop",
+    );
+    const empty = path.join(tmp, "empty-resources");
+    fs.mkdirSync(empty, { recursive: true });
+    assert.equal(
+      detectSurface({ execPath: "/usr/bin/node", resourcesPath: empty, env: {}, versions: ELECTRON, argv: [] }),
+      "web",
+      "空 resources 目录不该判 desktop",
+    );
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
 });
 
 test("社区 Electron 端认得出来（ds-bot / dsh-next / deepseek-bot）", () => {
