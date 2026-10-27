@@ -22,14 +22,18 @@ jobs:
           fetch-depth: 0
 
       - name: Syntax-check plugin entry
+        # 逐个文件列名字会漏：新加的 lib/*.js 不写进来就等于没检查。
+        # 改成扫全量，保证 lib/ 与 bin/ 下每个文件都被 --check 过。
         run: |
-          node --check lib/index.js
-          node --check lib/core.js
-          node --check lib/reapply.js
-          node --check lib/runtime-sync.js
-          node --check client.js
-          node --check bin/dsh-purge.js
+          set -e
+          n=0
+          for f in lib/*.js lib/*.mjs bin/*.js client.js; do
+            node --check "$f"
+            n=$((n+1))
+          done
+          echo "syntax-checked $n files"
           node --check scripts/assert-patches.mjs
+          node --check scripts/assert-soul-guard.mjs
           node --input-type=module -e "import './lib/index.js'"
           node scripts/assert-patches.mjs
 

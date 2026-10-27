@@ -4,7 +4,7 @@
 
 <h1 align="center">⚔️ DeepSeek Harness cybersecurity red-team tool (dsh-purge)</h1>
 
-<p align="center"><strong>Version 1.1.94-dsh</strong></p>
+<p align="center"><strong>Version 1.1.95-dsh</strong></p>
 
 <p align="center">
   <em>DeepSeek Harness jailbreak: every model, swap prompts per model. Default prompt for 小码酱. Please star ⭐ If you build on this, see Attribution required.</em>
@@ -74,9 +74,8 @@ Harness does more than forward a prompt. It rewrites prompts, approval gates, sa
 
 | You get | What it does |
 |---|---|
-| **dsh-purge dock** | A button beside the session title opens the right dock. Two pages: Clean and Drill |
+| **dsh-purge dock** | A button beside the session title opens the right dock with one page: Clean |
 | **Clean** | Grouped patch status, Apply / Restore / Uninstall, prompt editor, multiple rule sets |
-| **Drill** | Built into the stable release. After authorization: assets, skills, and the local environment. Only for a host you manage, an offline target, or a written authorized exercise |
 | **Host policy** | Default copy, permission policy, and tool limits. Official capabilities stay. No second invented identity |
 | **On start** | Checks and reapplies. After npm overwrites `node_modules`, you do not hand-edit files |
 
@@ -366,21 +365,11 @@ Plugin config lives in `cordis.patch.yml` (`postPrompt` is empty by default):
 
 ## Preview
 
-**dsh-purge** sits beside the session title. It opens a right-hand dock with two pages: **Clean** and **Drill**. Switch **Light / Ink**. Patches are grouped; the count only includes items that actually applied. Rule sets sit in a list above the editor, with Enable and Delete on each row.
-
-The first time you open Drill you read the notice, wait out the countdown, scroll to the end, and check three boxes. Clean does not need that step. Drill is only for a host you manage, an offline target, or an exercise that already has written authorization.
+**dsh-purge** sits beside the session title. It opens a right-hand dock with one page: **Clean**. Switch **Light / Ink**. Patches are grouped; the count only includes items that actually applied. Rule sets sit in a list above the editor, with Enable and Delete on each row.
 
 **Clean**
 
 ![Clean](docs/preview/dock-clean.png)
-
-**Drill authorization**
-
-![Drill authorization](docs/preview/dock-auth.png)
-
-**Drill**
-
-![Drill](docs/preview/dock-drill.png)
 
 **Patches**
 
@@ -396,7 +385,6 @@ On the Clean page, under Prompt. One host per line, then Save list. Steps are in
 |---|---|
 | dsh-purge | button beside the session title; opens or collapses the dock |
 | Clean | the old Rules page: patches, prompt, rule sets, skills |
-| Drill | assets, skills, and environment after authorization. The tab says Unauthorized until then |
 | Patches | grouped status, Apply, Restore, or Uninstall |
 | Prompt | edit `prompt-inject.md` as the session override |
 | Own servers | one IP or exact hostname per line, saved to `$DSH_HOME/net-scope-allow.txt` |
@@ -407,7 +395,7 @@ On the Clean page, under Prompt. One host per line, then Save list. Steps are in
 
 ## Layout
 
-`bin/` is the CLI, `lib/` is patches and the drill console, `client.js` is the dock, and `docs/` holds the preview images. The red-team preset and bundled skills were removed wholesale in 1.1.73 — the repo has no `presets/`, `skills/`, or `redteam/`.
+`bin/` is the CLI, `lib/` is patches and host state, `client.js` is the dock, and `docs/` holds the preview images. The red-team preset, bundled skills, and the drill console were removed wholesale — the repo has no `presets/`, `skills/`, or `redteam/`, and the dock has no Drill tab.
 
 Runtime files live under `$DSH_HOME`: `prompt-inject.md`, `rules/`, `skills/`, `net-scope-allow.txt`. If `DSH_HOME` is unset, the launcher-adjacent `.dsh` wins over `~/.dsh`. Web and the desktop app each use their own home. Skills are not part of the inject section and do not replace the prompt.
 

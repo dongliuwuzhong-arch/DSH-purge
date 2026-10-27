@@ -1,7 +1,39 @@
 # 更新日志
 
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 / rc.3 兼容变体**。
-上游以 MIT 发布、作者已宣布停更（1.1.71，`dshTarget: 0.2.0-rc.2`）。
+上游以 MIT 发布，仍在维护（发版到 1.1.81，`dshTarget: 0.2.0-rc.2`）；本分支跟的是 0.2.1-rc.3。
+
+## 1.1.95-dsh · 2026-10-28 · 砍掉演练台、core.js 拆成四块、认社区 Electron 端
+
+### 变更
+
+- **删掉演练台（整块，不保留入口）。** 侧栏 8764 行里有 4213 行是它（`__DSH_PURGE_DRILL_BEGIN__` 块），
+  外加授权门 `AuthGate`、`drill-grant` 后端路由与 `lib/drill-grant.js`、i18n 的 `dock.drill` / `auth.*`、
+  两张预览图。全部移除后 `client.js` **4287 行 / 199 KB**（−59.9% 字节），侧栏只剩「清洗」一页。
+  保留下来的只有环境发送门禁 `EnvAdaptSendGate` —— 它只判「当前会话是不是红队预设」，
+  不吃演练台路由，是红队环节唯一的安全阀；摘掉了它内部两处「未授权就跳演练台授权」的分支。
+- **`lib/core.js` 从 8301 行拆到 4912 行。** 抽两个模块：
+  - `lib/atomic-io.js`（3.4 KB）：`renameSyncWithRetry` / `renameWithRetry` / `atomicWriteSync` /
+    `atomicWriteFile` / `atomicCopyFile` 与退避常量。顺手**断开了 `core.js` ↔ `desktop.js` 的循环 import**
+    （以前能跑全靠 ESM 提升函数声明）。
+  - `lib/patches.js`（3318 行）：整张 82 条补丁表与其 22 个顶层依赖（`STRONG_INTRO_*`、`quotedConst`、
+    `clearShellNetworkBan` 等）。`core.js` 仍 `export { ALL_PATCHES }`，三处外部引用一行没改。
+- **认社区 Electron 端。** `lib/surface.js` 新增 `isCommunityElectronHost()`：认 `ds-bot` / `dsbot` /
+  `deepseek-bot` / `dsh-next` 四种进程名与安装路径。宽判据**只在 `process.versions.electron` 存在时生效**，
+  纯 Node 进程拿同样的路径仍判 `web` —— 免得把源码仓库误当桌面安装。
+- **CI 的语法检查不再逐个人工列文件名**，改成遍历 `lib/*.js` `lib/*.mjs` `bin/*.js` `client.js`。
+  以前新增文件不写进清单就等于没检查，绿是假的。
+
+### 测试
+
+- 新增 `test/surface.test.mjs` 6 条；全量 **37 tests / 37 pass**。
+- `assert-patches` = `patches=82 unique_ids=ok changelog=82`；`assert-soul-guard` digest 仍是 `6320043cad95`
+  —— 这次动了 4000 多行代码，注入正文与 16 条破甲补丁一个字节没动。
+
+### 没验的
+
+- 真宿主上跑一次完整卸载（`revertAllShims` / `revertCmdFlash` 两段仍只在注入式测试里覆盖）。
+- 宿主升级时 `refreshStaleBaksForUpgrade` 刷新 bak 的那一场（等 0.2.2）。
 
 ## 1.1.94-dsh · 2026-10-27 · 文本启动器其实一直被误判、剥注入剥不干净、bak 判据可预演
 
