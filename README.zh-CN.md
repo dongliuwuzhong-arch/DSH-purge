@@ -503,6 +503,9 @@ node --check bin/dsh-purge.js
 node --check scripts/assert-patches.mjs
 node scripts/sync-runtime.mjs          # 只报告；副本落后时退出码 1
 node scripts/assert-patches.mjs        # 补丁表自检：id 唯一、条数与 CHANGELOG 一致
+node scripts/assert-soul-guard.mjs     # 灵魂闸门：注入正文与禁改破甲补丁的指纹，越界退出码 1
+node --test "test/**/*.test.mjs"       # 单元测试：judge / cycle / write / host / uninstall / shim
+node scripts/check-bak-judge.mjs       # 只读预演 bak 判据（不写盘）；可传 aiBase 或设 DSH_PURGE_AI_BASE
 ```
 
 profile 里的 `node_modules/dsh-purge` 是**拷贝**，不是指向 `~/.dsh/plugins/dsh-purge` 的链接：
@@ -637,6 +640,7 @@ git branch -m master main  # 只在你还停在 master 上时跑；已经叫 mai
 - 改动范围是本机 `@deepseek-ai/*` 包里的渲染文案、默认策略和执行逻辑，以及用户目录下的覆盖文件与规则集。
 - 升级后原文对不上会显示跳过，这次应用仍算完成，不会乱改。
 - 不改动非 `@deepseek-ai` 的第三方插件源仓库（启动时的 CMD 无感会**尽力**修补已装的 doctor / market / 梁神 / mnemon，属运行时补丁）。
+- **1.1.94 之前，启动器那一路一直是空转**：`isTextShim()` 调用 `fs.readSync`，而这层 `fs` 是按路径路由的表（`lib/extract-asar.js`），fd 类方法不在表里 → 抛 `TypeError` 被自己的 `catch` 吞掉，恒判 `binary`；于是注入剥离、密封 bin 清扫全成了空操作，而状态行看起来"正常"。同时 `stripShimInject()` 剥完残留块首标记，`shimIsPatched()` 永远为真、每趟再剥一遍。1.1.94 两处都修了，重启后状态行从 `shim: dsh.cmd=binary` 变成 `original`（宿主自带文件本来就没被动过）。
 - 安装：**npm 上没有 `dsh-purge` 这个包**，`add dsh-purge` 会 404。用 main.tar.gz 的 URL、当前目录 `add .`，或走手动安装。桌面端的 `--profile desktop` 被普通 CLI 拒绝（`profile "desktop" is managed exclusively by the Electron application`），要用安装目录自带的桌面 CLI。
 
 ---

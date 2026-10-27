@@ -498,6 +498,9 @@ node --check bin/dsh-purge.js
 node --check scripts/assert-patches.mjs
 node scripts/sync-runtime.mjs          # report only; exit 1 when a profile copy lags
 node scripts/assert-patches.mjs        # patch table: unique ids, count matches CHANGELOG
+node scripts/assert-soul-guard.mjs     # soul guard: fingerprints of the inject body and the patches it forbids
+node --test "test/**/*.test.mjs"       # unit tests: judge / cycle / write / host / uninstall / shim
+node scripts/check-bak-judge.mjs       # read-only bak verdict preview (writes nothing); arg or DSH_PURGE_AI_BASE
 ```
 
 A profile's `node_modules/dsh-purge` is a **copy**, not a link to `~/.dsh/plugins/dsh-purge`:
@@ -630,6 +633,7 @@ git branch -m master main  # only if you are still on master; on main it fails w
 - After an upgrade, unmatched originals show as skipped. Apply still completes, and those files are left unchanged.
 - Third-party plugin *source repos* outside `@deepseek-ai` are left alone (CMD silence may **best-effort** patch installed doctor / market / liangshen / mnemon at runtime).
 - Editing `$DSH_HOME/prompt-inject.md` on builds ≤1.1.83 gets silently reverted within about a minute: the "is this our default" check counted **any single** matching signature line as proof, so a hand-edited copy still looked like ours and `installOverride()` overwrote it, resetting `customized` to false along the way. Fixed in 1.1.84 (`some` → `every`). On an older build, change the first line (`[OPERATOR CAPABILITY BLOCK` → `[OPERATOR CAPABILITY`) to break the lineage check and make your edits stick.
+- **Before 1.1.94 the whole launcher path was a no-op.** `isTextShim()` called `fs.readSync` on the path-routed `fs` from `lib/extract-asar.js`; fd-based calls are not in that table, so it threw `TypeError`, the function's own `catch` ate it, and every launcher was reported as `binary` — making inject stripping and sealed-bin cleanup do nothing while the status line looked fine. On top of that, `stripShimInject()` left the block's opening marker behind, so `shimIsPatched()` was always true and every run re-stripped. Both fixed in 1.1.94: after a restart the line goes from `shim: dsh.cmd=binary` to `original` (the host's own file was never touched).
 - Install: **there is no `dsh-purge` package on npm** — `add dsh-purge` returns 404. Use the main.tar.gz URL, `add .` from this repo, or Manual install. The ordinary CLI refuses `--profile desktop`; use the desktop CLI that ships in the install directory.
 
 ---
