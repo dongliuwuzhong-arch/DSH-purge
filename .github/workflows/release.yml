@@ -36,6 +36,10 @@ jobs:
       - name: Unit tests
         run: node --test "test/**/*.test.mjs"
 
+      - name: Soul guard
+        # 破甲不许改灵魂：注入正文与破甲补丁一旦变化，这道门就红。
+        run: node scripts/assert-soul-guard.mjs
+
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

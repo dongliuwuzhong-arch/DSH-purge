@@ -3,6 +3,43 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 / rc.3 兼容变体**。
 上游以 MIT 发布、作者已宣布停更（1.1.71，`dshTarget: 0.2.0-rc.2`）。
 
+## 1.1.93-dsh · 2026-10-27 · 备份后缀收敛到一处、SOUL-GUARD 变成真闸门、卸载开始被测
+
+### 问题
+
+- **`.dshpurge.bak` 有三处真值**：`lib/core.js` 的常量、`lib/host-state.js` 的常量、以及补丁源码字符串里的字面量。
+  改一处漏一处，备份/回滚/卸载清单就会各按各的后缀干活 —— 这种错不会报错，只会**静默漏文件**。
+- **`SOUL-GUARD.md` 只是一张纸**：写着"改了灵魂就整轮回退"，但没有代码、没有 CI，全靠自觉。
+  而且它指的对象是 `lib/prompt-inject.md` —— 那个路径**不存在**，真正文是 `lib/default-prompt-inject.md`，
+  "禁改清单"里还留着 1.1.92 已删掉的 #88。
+- **真卸载从未被测过**：`uninstallPurge()` 会真改宿主 CLI 目录（`revertAllShims` / `revertCmdFlash`），
+  谁都不敢在测试里整趟跑，于是"卸载时会不会炸在某个字段上"一直是猜的。
+
+### 改法
+
+- **后缀收敛**：`lib/core.js` 导出 `BAK_SUFFIX`，10 处运行时点统一用它（`:390 `:6000 `:6167 `:6315 `:6353 `:7343 `:7406 `:7593 `:7671 `:7790`）。
+  补丁源码字符串里那一处（`restoreMissingOriginalsFromBak` 写进宿主的代码）**故意保留字面量** —— 那段代码要能在没有本插件的环境里跑。
+- **`lib/host-state.js` 不再自己定后缀**：`writeBakManifest(aiBase, dshHome, { suffix })` 由调用方传，模块内只留一个兜底常量，且仍然只依赖 node 内置（不 import core）。
+  卸载路径改为 `writeBakManifest(..., { suffix: core.BAK_SUFFIX })`。
+- **SOUL-GUARD 落成 CI 闸门**：新增 `scripts/assert-soul-guard.mjs` + 基线 `soul-guard.lock`。
+  基线 = `lib/default-prompt-inject.md` 的 sha256 + 16 条灵魂补丁（#1 #2 #3 #4 #25 #26 #32 #40 #43 #55 #66 #71 #73 #76 #87 #89）的语义指纹
+  （id / name / file / rel / markers / replacements，RegExp 按 source+flags 序列化；`desc`、`layer` 这类文案不在指纹里）。
+  改了灵魂就得 `--update` 重写基线并随提交进 git；想放行得显式 `--allow-soul-change`。
+  `.github/workflows/release.yml` 增加 **Soul guard** 一步：越界即红。
+- **卸载可注入**：`uninstallPurge({ state, skipRuntime })`。`state` 省掉 `gatherState()`；`skipRuntime: true` 跳过 shim / flash 复原（那两步会真改宿主安装目录）。
+  不是给用户的新开关，是把"会动宿主"和"不会动宿主"拆开，好让测试能整趟跑到报告生成。
+- **新增 `test/uninstall.test.mjs`**（2 条）：注入 state 跑完整卸载 —— 补丁逐字节回滚、bak 被吃掉、
+  破甲预设挪进 `.agent-presets/.disabled/`、备份清单只剩游离 bak 且 `original` 不带后缀、
+  并且**断言宿主 `dsh.cmd` 与其 bak 一个字节都没动**（`skipRuntime` 的承诺）。空场幂等另测一条。
+- **`SOUL-GUARD.md` 修正**：路径改成 `lib/default-prompt-inject.md`，补上用户副本 `$DSH_HOME/prompt-inject.md`，
+  去掉 #88 残留（改成 #87/#89），并写明闸门怎么跑、基线是什么。
+- 补丁表仍是 **82 条**，一条没加没删。
+
+### 验证
+
+- `node --test "test/**/*.test.mjs"`：cycle 5 条 + host 6 条 + judge 6 条 + write 5 条 + uninstall 2 条 = **24 条全绿**。
+- `node scripts/assert-soul-guard.mjs` 绿；故意改一个字节 → 红（exit 1）；`--allow-soul-change` → 放行；还原 → 复绿。
+- `node scripts/assert-patches.mjs`：`patches=82 unique_ids=ok changelog=82`。
 ## 1.1.92-dsh · 2026-10-27 · 解压不写空文件、卸载不留下会指向空气的预设
 
 ### 问题
