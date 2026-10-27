@@ -1,3 +1,37 @@
+# 1.1.92-dsh
+
+## 中文
+
+- 版本 **1.1.92-dsh**，目标宿主 **0.2.1-rc.3**。补丁表 83 → **82**（删掉 #88，它在本机一直是 `skipped`，删掉不影响任何已生效文件）。
+
+### 改了什么
+
+- **解压**：纯 Node 兜底路把 `pkg/` 这种目录条目当文件写，写出的空文件会挡住后面的 `pkg/a.txt`（`EEXIST` / `ENOTDIR`）。现在识别目录条目就建目录，穿越路径照样拦。影响面是装技能（`skills.js`）和自更新（`update.js`）。
+- **卸载收拾**（新模块 `lib/host-state.js`）：卸载时把 `.agent-presets/redteam/` 改名进 `.agent-presets/.disabled/`（已存在就带时间戳，**永不删除**）；并把还是剩下的 `*.dshpurge.bak` 记成 `$DSH_HOME/dsh-purge-bak-manifest.json`（路径 / 大小 / mtime / sha256 / 原文件是否还在），**只写清单不动文件**。停用（disable）不做这两件事。
+- **删掉 #88**：`HUNG_PROMPT_STRICT_NEEDLE` 在 rc.3 上是 `skipped`，但宿主小改一行就可能命中，把注入块从「人格之后」挪到最前面。留着只有风险没有收益。
+- **新增 `SOUL-GUARD.md`**：把「不改变灵魂的前提下破甲」写成禁改清单 —— `lib/prompt-inject.md`、redteam 预设、#1 / #40 / #89 只许原样搬运，diff 一碰就整轮回退。
+
+### 实测
+
+- `node --test "test/**/*.test.mjs"` = **22/22 通过**；新增 `test/host.test.mjs` 六条。
+- `node scripts/assert-patches.mjs` → `patches=82`。
+
+## English
+
+- Version **1.1.92-dsh**, targets host **0.2.1-rc.3**. Patch table 83 → **82** (dropping #88, which was always `skipped` here; no applied file changes).
+
+### Changed
+
+- **Zip extraction**: the pure-Node fallback wrote directory entries such as `pkg/` as empty files, which then blocked the real `pkg/a.txt` (`EEXIST` / `ENOTDIR`). Directory entries now create directories; path-traversal checks still reject `../evil/`. Affects skill install (`skills.js`) and self-update (`update.js`).
+- **Uninstall cleanup** (new `lib/host-state.js`): on uninstall, `.agent-presets/redteam/` is renamed into `.agent-presets/.disabled/` (timestamped if one already exists, **never deleted**), and any remaining `*.dshpurge.bak` files are recorded in `$DSH_HOME/dsh-purge-bak-manifest.json` (path / size / mtime / sha256 / whether the original still exists) — **manifest only, no file is touched**. Disable does neither.
+- **#88 removed**: `HUNG_PROMPT_STRICT_NEEDLE` sat `skipped` on rc.3, but a one-line host change could activate it and move the injection block from after the persona to the very front. Risk without benefit.
+- **New `SOUL-GUARD.md`**: the "strip the harness without touching the soul" rule written as a diff gate — `lib/prompt-inject.md`, the redteam preset and patches #1 / #40 / #89 may only be carried verbatim; any diff touching them reverts the whole round.
+
+### Measured
+
+- `node --test "test/**/*.test.mjs"` = **22/22 passing**; `test/host.test.mjs` adds six cases.
+- `node scripts/assert-patches.mjs` → `patches=82`.
+
 # 1.1.91-dsh
 
 ## 中文

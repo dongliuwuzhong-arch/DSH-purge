@@ -3,6 +3,40 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 / rc.3 兼容变体**。
 上游以 MIT 发布、作者已宣布停更（1.1.71，`dshTarget: 0.2.0-rc.2`）。
 
+## 1.1.92-dsh · 2026-10-27 · 解压不写空文件、卸载不留下会指向空气的预设
+
+### 问题
+
+- **纯 Node 兜底解压把目录条目写成空文件**（上游 #170 同一个洞）：`zip` 里 `pkg/` 这种条目名字以 `/` 结尾，
+  `safeZipName()` 去掉斜杠后当成普通文件写，于是磁盘上出现一个**名为 `pkg` 的空文件**；
+  后面真正的 `pkg/a.txt` 再写就撞 `EEXIST` / `ENOTDIR`，整个解压失败。
+  受影响的是 `skills.js`（装技能）和 `update.js`（自更新）—— 都是纯 Node 路才走到，所以平时看不见。
+- **卸载后 `.agent-presets/redteam/` 留在原地**：里面的 `anchor-gate.mjs`、`agent.cordis.yml` 都是插件带来的，
+  插件没了它就成了指向空气的破甲预设，新会话还可能按它起。
+- **卸载后 `*.dshpurge.bak` 无主**：插件删了，那批备份文件就变成"不知道是谁的"。
+- **#88 `HUNG_PROMPT_STRICT_NEEDLE` 是会自己醒来的地雷**：它在 rc.3 上 `skipped`，
+  但宿主某次小改一行就可能命中，然后把注入块从「人格之后」挪到最前面 —— 位置一步之差，近因效应掉一档。
+
+### 改法
+
+- `lib/zip-extract.js`：识别 `/` 结尾条目 → 建目录而不是写空文件；穿越路径检查照旧（`../evil/` 抛错）。
+- 新增 `lib/host-state.js`（只依赖 node 内置模块，能单独测）：
+  - `relocateRedteamPreset(dshHome)`：**只在卸载分支**把 `redteam` 改名进 `.agent-presets/.disabled/`，
+    已存在同名就带时间戳后缀（`redteam-20261027-112233`），**永不删除**。停用（disable）不走这里 —— 停用是暂时的，预设得留着。
+  - `writeBakManifest(aiBase, dshHome)`：递归收集还剩的 `.dshpurge.bak`（跳过 `node_modules` / `.git`），
+    写 `$DSH_HOME/dsh-purge-bak-manifest.json`：原文件路径、大小、mtime、sha256、原文件是否还在。**只写清单，不动文件。**
+- `lib/uninstall.js`：卸载流程尾部接上这两步，报告里多 `presets` / `bakManifest` 两个字段。
+- 删除补丁 **#88**（补丁表 83 → 82）：它是 `skipped` 状态下的隐患，删掉不会改变任何已生效的宿主文件。
+- 新增 `SOUL-GUARD.md`：把「破甲不许改灵魂」的禁改清单（`prompt-inject.md`、redteam 预设、#1/#40/#89）写成 diff 闸门。
+
+### 实测
+
+- `node --test "test/**/*.test.mjs"` = **22/22 通过**（judge 6 + cycle 5 + write 5 + host 6）。
+  新增 `test/host.test.mjs` 六条：目录条目建成目录、只有目录条目也能建空目录、`../evil/` 被拦、
+  卸载改名不删除、重复卸载带时间戳不覆盖、bak 清单只写清单且跳过 `node_modules`。
+- `node scripts/assert-patches.mjs` → **patches=82**，补丁表 82 条。
+- 真宿主行为不变：卸载以外的路径没有一行改动，#88 本来是 skipped，删掉不影响 applied 数。
+
 ## 1.1.91-dsh · 2026-10-27 · 循环与重试补上真文件系统测试
 
 ### 问题
