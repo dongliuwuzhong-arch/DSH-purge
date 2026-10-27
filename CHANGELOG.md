@@ -3,6 +3,23 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 / rc.3 兼容变体**。
 上游以 MIT 发布、作者已宣布停更（1.1.71，`dshTarget: 0.2.0-rc.2`）。
 
+## 1.1.91-dsh · 2026-10-27 · 循环与重试补上真文件系统测试
+
+### 问题
+
+- 1.1.89 / 1.1.90 修的是「假备份」和「写文件被占用」，但两处都只在真宿主上手工验过一次。手工验过的东西没法回归：下次谁改了 `targetLooksPatched()` 或退避表，没人会知道备份是不是又开始变假。
+
+### 改法
+
+- 新增 `test/cycle.test.mjs`（5 条）：在临时 aiBase 上跑完整的 备份 → apply → 回滚，断言回滚后**逐字节**等于原件、bak 的建与删时机正确、重复 apply 幂等且不碰 bak；并专门验 `backupAll()` 拒建假原件（`refused`），以及 `refreshStaleBaksForUpgrade()` 的两个方向——宿主升级换了内容要刷新 bak，现网仍是我们打过的版本则一格不碰。
+- 新增 `test/write.test.mjs`（5 条）：改 `fs.renameSync` / `fs.promises.rename` 注入 `EPERM / EBUSY / EACCES`，验证退避重试第 3 次成功、永久失败重试 4 次后抛带路径和「退出宿主后重试」的错误、非重试 errno 一次就抛、临时文件全部清理。
+- 测试跑在 `os.tmpdir()` 下的临时 aiBase，并把 `DSH_HOME` 指到临时目录 —— 不碰真宿主任何一个字节。
+
+### 实测
+
+- `node --test "test/**/*.test.mjs"` = 16/16 通过（judge 6 + cycle 5 + write 5）。
+- 运行时行为与 1.1.90 完全一致：83 条 applied 71 / na 6 / skipped 6 / pending 0，backupGap suspect 0 / noop 3。
+- 仍未验的只剩一场：真宿主升级时 bak 的实际刷新（只在 fixture 上验过，故意的——判据一旦错就把 51 份干净 bak 全污染）。
 ## 1.1.90-dsh · 2026-10-27 · 空操作不再算可疑，写文件会等宿主松手
 
 ### 问题

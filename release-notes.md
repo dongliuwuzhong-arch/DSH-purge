@@ -1,3 +1,36 @@
+# 1.1.91-dsh
+
+## 中文
+
+- 版本 **1.1.91-dsh**，目标宿主 **0.2.1-rc.3**。**补丁表 83 条一条没动**，运行时行为与 1.1.90 完全一致 —— 这一版只补测试。
+
+### 加了什么
+
+- `test/cycle.test.mjs`（5 条）：真文件系统上的完整循环 —— 备份(made) → apply(applied) → 回滚(reverted)，断言回滚后**逐字节**回到原件、bak 的建与删时机正确；重复 apply 幂等且不覆盖 bak；现网已带补丁痕迹时 `backupAll()` 拒建假原件（进 `refused`）；`refreshStaleBaksForUpgrade()` 两个方向都钉住 —— 宿主升级换了内容就刷新 bak，现网仍是我们打过的版本就一格不碰。
+- `test/write.test.mjs`（5 条）：注入 `fs.renameSync` / `fs.promises.rename` 抛 `EPERM / EBUSY / EACCES`，验证退避重试第 3 次成功、永久失败重试 4 次后抛带路径与「退出宿主后重试」的错误、非重试 errno 一次就抛、临时文件全部清理。
+- 全部测试跑在 `os.tmpdir()` 下的临时 aiBase，`DSH_HOME` 指到临时目录 —— 不碰真宿主任何一个字节。
+
+### 实测
+
+- `node --test "test/**/*.test.mjs"` = **16/16 通过**（judge 6 + cycle 5 + write 5），CI 跑同一条命令。
+- 载入后状态：83 条 applied 71 / na 6 / skipped 6 / pending 0；backupGap missing 0 / suspect 0 / noop 3。
+- 还剩一场没验：真宿主升级时 bak 的实际刷新。只在 fixture 上验过，故意的 —— 判据一旦错，51 份干净 bak 会被一起污染，代价不对称。
+
+## English
+
+- Version **1.1.91-dsh**, targets host **0.2.1-rc.3**. **Patch table unchanged at 83 entries**; runtime behaviour is identical to 1.1.90. This release only adds tests.
+
+### Added
+
+- `test/cycle.test.mjs` (5 cases): a real-filesystem round trip — backup(made) → apply(applied) → revert(reverted) — asserting the file returns **byte-identical** to the original and that bak files are created and removed at the right moments; repeated apply is idempotent and never touches the bak; `backupAll()` refuses to bake an already-patched file as an "original" (it goes to `refused`); both directions of `refreshStaleBaksForUpgrade()` are pinned — a genuine host upgrade refreshes the bak, while a live file that is still our patched version is left alone.
+- `test/write.test.mjs` (5 cases): injects `EPERM / EBUSY / EACCES` into `fs.renameSync` / `fs.promises.rename` and asserts the third attempt succeeds, a permanent failure surfaces after 4 attempts with the path and the "quit the host and retry" hint, non-retryable errnos fail on the first attempt, and temp files are always cleaned up.
+- All tests run against a temporary aiBase under `os.tmpdir()` with `DSH_HOME` pointed at a temp directory — the real host is not touched.
+
+### Measured
+
+- `node --test "test/**/*.test.mjs"` = **16/16 passing** (judge 6 + cycle 5 + write 5); CI runs the same command.
+- Host state after load: 83 patches — applied 71 / na 6 / skipped 6 / pending 0; backupGap missing 0 / suspect 0 / noop 3.
+- One scenario still unverified: bak refresh during a real host upgrade. Verified on a fixture only, deliberately — a wrong judgement there would corrupt all 51 clean baks at once.
 # 1.1.90-dsh
 
 ## 中文
