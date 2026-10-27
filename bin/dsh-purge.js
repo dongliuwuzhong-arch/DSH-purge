@@ -28,11 +28,16 @@ function printStatus(state) {
     for (const row of runtimeSync.runtimeSyncLines(state.runtime_sync)) out.push("  " + row);
   }
   out.push("");
-  out.push(`  补丁 ${state.patches_applied}/${core.ALL_PATCHES.length} 已清洗, ${state.patches_pending} 待清洗`);
-  for (const p of core.ALL_PATCHES) {
-    const s = state.patch_status[p.id];
-    const mark = s === "applied" ? "✓" : s === "pending" ? "✗" : "·";
-    out.push(`    ${mark} [#${String(p.id).padEnd(2)}] ${p.name.padEnd(30)} ${p.layer}/${p.layer_en} — ${s}`);
+  if (state.ai_base) {
+    out.push(`  补丁 ${state.patches_applied}/${state.patches_total} 已清洗, ${state.patches_pending} 待清洗, ${state.patches_skipped} 跳过`);
+    for (const p of core.ALL_PATCHES) {
+      const s = state.patch_status[p.id];
+      const mark = s === "applied" ? "✓" : s === "pending" ? "✗" : "·";
+      out.push(`    ${mark} [#${String(p.id).padEnd(2)}] ${p.name.padEnd(30)} ${p.layer}/${p.layer_en} — ${s}`);
+    }
+  } else {
+    // 没定位到宿主插件根时 patchStatus 是空的：印 83 行 undefined 只会让人以为补丁全丢了。
+    out.push("  补丁 / patches  未定位宿主插件根，逐条状态未知（设 DSH_BASE 后重试）");
   }
   out.push("");
   out.push(`  shim: dsh.cmd=${state.shim_cmd}  dsh.ps1=${state.shim_ps1}  dsh=${state.shim_bin}`);
