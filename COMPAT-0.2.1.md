@@ -76,7 +76,10 @@ Start-Process '<install>\DeepSeek Harness.exe'
 | `dsh-cordis-client-runner` | `lib/client.js` | 否（零引用） |
 | `dsh-client-ui-agent-preset` | README + `lib/client.js` + 新增 `analytics.d.ts` | 否（零引用） |
 
-### 证据二：83 条补丁在 rc.3 源码上的命中情况
+### 证据二：补丁表在 rc.3 源码上的命中情况
+
+> 注：下面是 1.1.8x 期的取证快照（当时 **83 条**）。从 **1.1.92-dsh** 起补丁表是 **82 条**，
+> #88 `HUNG_PROMPT_STRICT_NEEDLE` 已移除（它在本机一直 `skipped`）。快照数字未重跑。
 
 把 rc.3 全量解包后直接调用 `patchStatus()`，并以 rc.2 同条件跑一遍作对照：
 
@@ -387,7 +390,7 @@ plugin 子命令里 `if (!manageDesktopProfile) rejectElectronProfile(plugin, op
 
 - DeepSeek Harness 官方桌面端 **0.2.1-rc.2**（Electron 44.7.0 / Node 24.21.0）
 - Windows x64
-- 宿主 83 条补丁逐条校验：`purge_status` 报 56/66 applied，其余为 0.2.0 兼容位 pending、不适用 skipped；三工具正常注册
+- 宿主补丁逐条校验（当时 83 条，1.1.92-dsh 起 82 条）：`purge_status` 报 56/66 applied，其余为 0.2.0 兼容位 pending、不适用 skipped；三工具正常注册
 - 重启后无新增 `crash-*-renderer.log`
 
 ---
