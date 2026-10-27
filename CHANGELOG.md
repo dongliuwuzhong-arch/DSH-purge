@@ -3,6 +3,44 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 / rc.3 兼容变体**。
 上游以 MIT 发布、作者已宣布停更（1.1.71，`dshTarget: 0.2.0-rc.2`）。
 
+## 1.1.94-dsh · 2026-10-27 · 文本启动器其实一直被误判、剥注入剥不干净、bak 判据可预演
+
+### 问题
+
+- **`isTextShim()` 永远返回 false。** 它开头写的是 `fs.readSync(...)`，而模块顶部的 `fs` 是 hostFs 路由表
+  （`lib/extract-asar.js`，按路径在 `node:fs` 与 `original-fs` 之间选一个）。`readSync` 的首个参数是 fd，
+  没法按路径路由，所以它压根不在表里 —— 调用即 `TypeError: fs.readSync is not a function`，被同一个函数里的
+  `catch` 吞掉。于是**所有文本启动器都被判成 `binary`**：`stripCmdInjectSync` 直接 return，密封 bin 的注入清扫、
+  `patchShim`/`revertShim` 的文本分支全是空操作。线上状态里那行 `dsh.cmd=binary` 看着像"这文件不该动"，
+  其实是这个 bug 在冒充正常。
+- **`stripShimInject()` 剥完还留一行。** 进入注入块时它把 begin 那一行 push 进 out 当占位，闭合时只把
+  `blockStart` 置 -1，**没把占位删掉**。于是文件永久带着 `dsh-purge shim begin`，`shimIsPatched()` 永远为真 ——
+  下一趟又判「被注入过」再剥一次，永远剥不干净。
+- **`refreshStaleBaksForUpgrade()` 只能真跑。** 宿主升级前没法预演「这次会刷掉哪些 bak」，而它一旦误判，
+  被覆盖的正是还原用的原件，代价不对称。
+- **1.1.93 遗留：`revertAllShims` / `sanitizeDesktopCommandRuntimes` 的目录写死**，测试够不着，
+  「真卸载会不会炸在宿主 CLI 那两段」仍然只能靠线上跑。
+
+### 改法
+
+- `isTextShim()` 改走 `fsFor(fp)`：fd 相关的 open/read/close 全用同一套 fs，不经过路由表。
+- `stripShimInject()` 闭合块时 `out.splice(blockStart, 1)` 删掉占位；未闭合（损坏注入）仍按 M33 整段还原。
+- 新增 `inspectStaleBaks(aiBase, { dryRun })` → `{ dryRun, refreshed, unchanged, skippedPatched, skippedUser, errors }`；
+  `refreshStaleBaksForUpgrade(aiBase, options)` 退化成 `inspectStaleBaks(...).refreshed`，调用方一行不用改。
+- `sanitizeDesktopCommandRuntimes({ dirs })`、`revertAllShims({ dirs, scrub, scrubDirs })`：目录可注入，
+  默认行为不变（仍按宿主探测）。
+- 新增 `scripts/check-bak-judge.mjs`：只读预演，宿主升级前后各跑一次。
+- 新增 `test/shim.test.mjs` 7 条：启动器从 bak 还原、幂等、无 bak 时只剥注入、剥离后不再判 patched、
+  `isTextShim` 认文本/认二进制、密封 bin 清扫只动本插件产物、`bin.js` 隐藏控制台复原、`inspectStaleBaks` 预演不写盘。
+
+### 验证
+
+- 全量测试 **31/31**（新增 7 条），`node --test "test/**/*.test.mjs"`。
+- 真宿主 `scripts/check-bak-judge.mjs`：**会刷新 0 · 判为已打补丁 47 · 备份==现网 5 · 读失败 0**（47+5=52 个目标键）。
+  也就是「判据没有把线上已打补丁的文件误判成原件」，这条是升级前该看到的样子。
+- 线上 `C:\Software\DSH\resources\runtime\cli\bin\dsh.cmd` 实测是 ASCII 文本、`dsh-purge shim` 命中 0 次：
+  修完后状态从 `binary` 变 `original`，宿主文件一个字节没动。
+
 ## 1.1.93-dsh · 2026-10-27 · 备份后缀收敛到一处、SOUL-GUARD 变成真闸门、卸载开始被测
 
 ### 问题
