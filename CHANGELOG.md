@@ -3,6 +3,28 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 / rc.3 兼容变体**。
 上游以 MIT 发布、作者已宣布停更（1.1.71，`dshTarget: 0.2.0-rc.2`）。
 
+## 1.1.87-dsh · 2026-10-27 · 回滚之后别再说「都干净了」
+
+### 问题
+两个主路径一直在骗人。
+
+- 四条 apply 路径（自动应用 / 命令 / `purge_apply` 工具 / Web 应用）只取 `report`，`backupRefused` 与 `backupErrors` 一句都不说。于是「备份缺口」只有命令行看得见，AI 走工具调用时完全不知道有几个文件根本没备份。
+- `revertAll()` 把「有目标文件、没有 bak」的路径塞进 `skipped`。`skipped` 里还混着「内容相同」和「保留前端包」两种本来就不该动的情形，而四种调用方（`revertAllHosts`、命令行 `--revert`、`purge_revert`、Web 回滚）又都只数 `reverted`。结果：回滚完说「完成」，那几个文件其实还带着补丁。
+
+### 改法
+- `revertAll()` 新增独立列表 `noBackup`；`revertAllHosts()` 一并汇总。命令行、工具、Web 三处回滚都会把它们列出来（工具返回 `no_backup=N`，最多列 5 条路径）。
+- `lib/index.js` 新增 `backupNote(multi)`，四条 apply 路径共用：命令行面板多一段 `⚠ 备份缺口: …`，工具返回文本带上它，Web 的 `/dsh-purge/apply` JSON 多 `backup_note` / `backup_refused`，自动应用写进日志。
+- `lib/runtime-sync.js` 反查源码根时校验 `package.json` 的 `name === "dsh-purge"`，并拒绝解析回 profile 自己（`"dsh-purge": "."` 那种写法以前会把 profile 当源码根，比对结果全是噪声）。
+- Web 面板多了两个只在出问题时才出现的指标：`运行副本`（差几个文件）与 `备份缺口`（几个目标没有 bak、其中几个已带补丁痕迹）。
+- CI 的发布步骤不再「Release 存在就 exit 0」：只跳过 `gh release create`，zip 资产一律 `--clobber` 重传。以前同版本号重推 main 会把新代码推上去、旧 zip 留在 Release 里。
+
+### 记账：状态里为什么会有两套补丁数字
+- 桌面宿主的 `purge_status` 按桌面面算（实测 `61/66 applied, 0 pending`）；命令行 `dsh-purge --status` 默认 `web` 面（实测 83 条里 `63` 已清洗 / `14` 不适用 / `6` 跳过）。
+- `groupPatchesForDisplay()` 也按面丢行，所以分组合计也不同（web 面 `60`、桌面面 `77`）。
+- **两套数字只在同一面内可比。** 想让命令行按桌面口径说话：`DSH_SURFACE=desktop DSH_BASE="C:/Software/DSH/resources/app/dsh/node_modules/@deepseek-ai"`。
+
+补丁表 83 条一条没动。
+
 ## 1.1.86-dsh · 2026-10-27 · 不再造「假备份」，缺口直接说出来
 
 ### 问题：bak 可能是「打完补丁的那份文件」

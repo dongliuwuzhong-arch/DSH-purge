@@ -4,7 +4,7 @@
 
 <h1 align="center">⚔️ DeepSeek Harness cybersecurity red-team tool (dsh-purge)</h1>
 
-<p align="center"><strong>Version 1.1.86-dsh</strong></p>
+<p align="center"><strong>Version 1.1.87-dsh</strong></p>
 
 <p align="center">
   <em>DeepSeek Harness jailbreak: every model, swap prompts per model. Default prompt for 小码酱. Please star ⭐ If you build on this, see Attribution required.</em>
@@ -599,6 +599,17 @@ Official npm-global is not patched. Sealed `host-commands` / `runtime-commands` 
 If nothing is found, set `DSH_BASE` / `DSH_DESKTOP_INSTALL`. No files are changed.
 
 ---
+
+## Patch counts
+
+Two counts show up and it is not a bug:
+
+- **desktop host**: `purge_status` inside the app reports against the patches that can run on that surface (measured `61/66`).
+- **command line**: `dsh-purge --status` defaults to the `web` surface, where more patch definitions apply (measured `63` applied / `14` n/a / `6` skipped out of 83).
+
+`groupPatchesForDisplay()` drops rows per surface as well, so group totals differ too (web `60`, desktop `77`). Compare numbers only within one surface; set `DSH_SURFACE=desktop` to make the CLI speak the desktop dialect.
+
+Backup gaps are reported on both surfaces. `.dshpurge.bak` is skipped on purpose when a target already carries patch markers: such a backup would be byte-identical to the patched file and `revertAll()` would skip it as "already reverted". `purge_status`, the apply result and the revert result all name the affected files.
 
 ## Releases
 

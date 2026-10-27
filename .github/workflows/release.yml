@@ -38,10 +38,11 @@ jobs:
           set -euo pipefail
           version="$(node -p "require('./package.json').version")"
           tag="v${version}"
-          if gh release view "$tag" >/dev/null 2>&1; then
-            echo "already published: $tag"
-            exit 0
-          fi
+          # 同一版本号再推 main 时不能整个跳过：以前这里直接 exit 0，
+          # 结果是代码推到 main、tag 也移动了，Release 里挂的 zip 还是旧包。
+          # 现在只跳过「创建」，资产一律重传（--clobber）。
+          exists=0
+          if gh release view "$tag" >/dev/null 2>&1; then exists=1; fi
           first="$(head -n 1 release-notes.md | tr -d '\r')"
           if [ "$first" != "# ${version}" ]; then
             echo "release-notes.md 第一行必须是 # ${version}，现在是: ${first}"
@@ -51,14 +52,14 @@ jobs:
           if git rev-parse -q --verify "refs/tags/${tag}^{}" >/dev/null; then
             commit="$(git rev-parse "refs/tags/${tag}^{}")"
             git archive --format=zip --prefix="dsh-purge-${version}/" --output="$zip" "$commit"
-            gh release create "$tag" --title "$tag" --notes-file release-notes.md
+            if [ "$exists" = "0" ]; then gh release create "$tag" --title "$tag" --notes-file release-notes.md; fi
           else
             git archive --format=zip --prefix="dsh-purge-${version}/" --output="$zip" HEAD
             args=(release create "$tag" --target "$GITHUB_SHA" --title "$tag" --notes-file release-notes.md)
             case "$version" in
               *beta*|*alpha*|*rc*) args+=(--prerelease) ;;
             esac
-            gh "${args[@]}"
+            if [ "$exists" = "0" ]; then gh "${args[@]}"; fi
           fi
           test -s "$zip"
           gh release upload "$tag" "$zip" --clobber

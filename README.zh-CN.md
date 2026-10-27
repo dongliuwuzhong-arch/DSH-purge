@@ -4,7 +4,7 @@
 
 <h1 align="center">⚔️ DeepSeek Harness 网络安全红队工具（dsh-purge）</h1>
 
-<p align="center"><strong>Version 1.1.86-dsh</strong></p>
+<p align="center"><strong>Version 1.1.87-dsh</strong></p>
 
 <p align="center">
   <em>DeepSeek Harness 破甲：让所有模型都能破甲，不同模型可换不同提示词；默认提示词面向国模「小码酱」。Jailbreak for every model — swap prompts per model. 求 Star 收藏 ⭐ 如要二开，请查看署名要求部分</em>
@@ -607,6 +607,17 @@ flowchart LR
 找不到目标时提示设置 `DSH_BASE`，不改文件。
 
 ---
+
+## 补丁口径
+
+状态里会出现两套数字，不是 bug：
+
+- **桌面宿主**：应用内 `purge_status` 按桌面面能跑的补丁算（实测 `61/66`）。
+- **命令行**：`dsh-purge --status` 默认按 `web` 面算，面内命中的补丁定义更多（实测 83 条里 `63` 已清洗 / `14` 不适用 / `6` 跳过）。
+
+`groupPatchesForDisplay()` 也按面丢行，所以分组合计也不同（web `60`、桌面 `77`）。**数字只在同一面内可比**；让命令行按桌面口径说话：`DSH_SURFACE=desktop`。
+
+备份缺口两面都会报。目标自身已带补丁痕迹时 `.dshpurge.bak` 是**故意不建**的——那样的备份与已打补丁的文件字节相同，`revertAll()` 会当成「已还原」跳过。`purge_status`、apply 结果、回滚结果都会点名受影响的文件。
 
 ## 更新
 

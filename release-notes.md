@@ -1,3 +1,49 @@
+# 1.1.87-dsh
+
+## 中文
+
+- 版本 **1.1.87-dsh**，目标宿主 **0.2.1-rc.3**。**补丁表 83 条一条没动**，这一版只修「回滚之后不报缺口」和发布链路。
+
+### 修了什么
+
+- 回滚不再假装干净：`revertAll()` 把「有文件、没备份」的目标单独记进 `noBackup`，`revertAllHosts()` 汇总；命令行 `--revert`、`purge_revert` 工具、Web 回滚都会列出来（`no_backup=N` 与最多 5 条路径）。以前它们被混进 `skipped`，四个调用方又只数 `reverted`，于是「回滚完成」这句话是假的。
+- apply 的备份缺口不再只有命令行看得见：四条主路径（自动应用 / 命令 / `purge_apply` / Web）共用 `backupNote()`；工具返回文本、Web JSON（`backup_note` / `backup_refused`）与日志都带上了。
+- `scripts/sync-runtime.mjs` 反查源码根时校验 `name === "dsh-purge"`，并拒绝把 profile 自己当源码根。
+- Web 面板新增两个只在出问题时才出现的指标：`运行副本`（差几个文件）与 `备份缺口`（几个目标没有 bak，其中几个已带补丁痕迹）。
+- CI 发布不再「Release 已存在就整段跳过」：只跳过创建，zip 资产一律 `--clobber` 重传，避免「代码是新的、Release 里还是旧包」。
+
+### 状态里为什么有两套补丁数字
+
+- 桌面宿主 `purge_status` 按桌面面算（实测 `61/66 applied, 0 pending`）；命令行 `dsh-purge --status` 默认 `web` 面（实测 83 条里 `63` 已清洗 / `14` 不适用 / `6` 跳过）；`groupPatchesForDisplay()` 也按面丢行，分组合计因此不同（web `60` / 桌面 `77`）。
+- 两套数字只在同一面内可比。想让命令行按桌面口径说话：`DSH_SURFACE=desktop DSH_BASE="C:/Software/DSH/resources/app/dsh/node_modules/@deepseek-ai"`。
+
+### 安装
+
+- 覆盖安装后重启宿主；启动时 `installed-rev` 会刷新成 `apply:1.1.87-dsh`。
+- 源码部署且改了代码：`node scripts/sync-runtime.mjs --apply`，再 `node scripts/sync-runtime.mjs` 复查（应为「全部同步」）。
+
+## English
+
+- **1.1.87-dsh**, target host **0.2.1-rc.3**. The 83-patch table is untouched; this release fixes "revert claims clean while files are still patched" plus the publish pipeline.
+
+### Fixed
+
+- `revertAll()` now reports targets that have no backup through a separate `noBackup` list, aggregated by `revertAllHosts()`; the CLI `--revert`, the `purge_revert` tool and the Web revert all list them (`no_backup=N`, first 5 paths). They used to be folded into `skipped` while all four callers only counted `reverted`.
+- The apply-side backup gap is no longer CLI-only: all four apply paths share `backupNote()`; the tool text, the Web `/dsh-purge/apply` JSON (`backup_note`, `backup_refused`) and the log now carry it.
+- `runtime-sync` validates `package.json#name === "dsh-purge"` when resolving the source root and refuses to treat the profile itself as the source.
+- The Web panel gained two conditional metrics: `Runtime copy` (differing files) and `Backup gap` (targets without a backup, and how many already carry patch markers).
+- CI no longer exits early when the Release already exists: it only skips creation and re-uploads the zip with `--clobber`.
+
+### Two patch counts
+
+- The desktop host reports the desktop surface (measured `61/66 applied, 0 pending`); the CLI defaults to the `web` surface (measured `63` applied / `14` n/a / `6` skipped out of 83); `groupPatchesForDisplay()` drops rows per surface too, so group totals differ (web `60` / desktop `77`).
+- Compare numbers only within one surface. To make the CLI speak the desktop dialect: `DSH_SURFACE=desktop DSH_BASE="C:/Software/DSH/resources/app/dsh/node_modules/@deepseek-ai"`.
+
+### Install
+
+- Overwrite-install, then restart the host; `installed-rev` becomes `apply:1.1.87-dsh` on boot.
+- Source deployments that changed code: `node scripts/sync-runtime.mjs --apply`, then re-check with `node scripts/sync-runtime.mjs` (expect "全部同步").
+
 # 1.1.86-dsh
 
 ## 中文
