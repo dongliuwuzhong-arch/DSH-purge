@@ -4,7 +4,7 @@
 
 本仓库：https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2 （公开，默认分支 `main`）
 上游：[YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge)（MIT，仍在发版，已到 1.1.81）
-本仓库分叉自上游 `1.1.71`、跟的是 **0.2.1-rc.3**，当前版本 `1.1.96-dsh`。
+本仓库分叉自上游 `1.1.71`、跟的是 **0.2.1-rc.3**，当前版本 `1.1.97-dsh`。
 
 ---
 

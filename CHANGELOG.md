@@ -3,6 +3,64 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 / rc.3 兼容变体**。
 上游以 MIT 发布，仍在维护（发版到 1.1.81，`dshTarget: 0.2.0-rc.2`）；本分支跟的是 0.2.1-rc.3。
 
+## 1.1.97-dsh · 2026-10-28 · 卸载当场跑了一遍，揪出两个只在真宿主上才现形的 bug
+
+### 问题（两个都是 1.1.96 卸载实测跑出来的，不是读代码猜的）
+
+- **BUG-A：同一个文件挂在两个 file key 下，回滚会报一个假的「没有备份」。**
+  `dsh-web-app/presets/standard.patch.yml` 同时挂在 `agent-preset`（补丁 #4）与
+  `preset-standard`（#24/#43/#63）下。`targetFilePairs()` 只按 `Object.entries` 纯展开、不按路径去重，
+  于是同一条路径产出两条记录。`revertAll()` 处理第一条时 `copyFile(bak, fp)` + `unlink(bak)`
+  把 bak 消耗掉，第二条再来就 bak 不存在 → 落进 `noBackup`。
+  报告上写着「1 个目标没有备份」，其实备份一直在、也已经用掉了。
+  真宿主卸载时就是它报的 `noBackup: 1`。
+- **BUG-B：`dsh.cmd.dsh-purge.bak` 这份孤儿备份永远清不掉。**
+  `lib/desktop.js` 的 `repairOfficialCliAfterUnpack()` 写 bak 用的是**连字符** `.dsh-purge.bak`，
+  而 `revertShim()` 只认 `BAK_SUFFIX = ".dshpurge.bak"`、`sanitizeDesktopCommandRuntimes()` 的两条正则
+  `/\.dshpurge\.bak$/i` 与 `/\.dshpurge\./i` 也匹配不到。整趟卸载跑完，它还躺在
+  `resources/runtime/cli/bin/` 里。
+  第二重成因：那个目录既不以 `/bin` + `host-commands|runtime-commands|dsh desktop` 命中
+  `isSealedRuntimeDir()`，也不是 `listDesktopCommandRuntimeDirs()` 的成员，
+  sanitize 的默认遍历范围压根走不到它。
+
+### 改法
+
+- `lib/core.js` 的 `targetFilePairs()` 改成按 `path.resolve(fp).toLowerCase()` 归并，
+  产出 `{ key, keys, path }`——同一个文件命中几个 key 就带几个。导出它，好让测试钉住。
+- 新增内部 `patchesForKeys(key)`：key 可以是字符串也可以是数组，跨全部 key 汇总补丁并去重。
+  `targetLooksPatched(text, key)` 与 `keyIsNoop(text, key, fp)` 都改走它，
+  判据不变（任一 `originalStillThere` → 未打过；任一 marker/replacement → 有痕迹；
+  `keyIsNoop` 要求全部 unchanged）。
+- 四个调用点（`inspectStaleBaks` 的 keyByPath、`backupAll`、`backupGap`、`revertAll`）改传 `keys`。
+- `lib/core.js` 的 `sanitizeDesktopCommandRuntimes()`：默认目录改成
+  `[...listDesktopCommandRuntimeDirs(), findDesktopShimDir()]` 并按规范化路径去重；
+  新增一段 `/\.dsh-purge\.bak$/i` 分支，记 `deleted_orphan_bak:<name>`。
+- **孤儿 bak 只删、绝不还原。** 它记的是「CLI 指向 `app.asar`」的修复前版本，
+  而解包后 `app.asar` 可能已经不存在（本机就只有解包的 `app/`），照它还原会把 CLI 指进空处。
+  所以 `lib/desktop.js` 那边**保持连字符不动**，只补注释说明这是故意的。
+
+### 验证
+
+- 新增回归两条：
+  - `test/cycle.test.mjs`「同一文件挂在两个 file key 下」：断言 `targetFilePairs` 只产出一条、
+    `keys` 合并成 `["agent-preset","preset-standard"]`，`revertAll` 的 `noBackup` 为空、`reverted` 命中。
+  - `test/shim.test.mjs`「连字符孤儿 bak 只删不还原」：造一份 `dsh.cmd.dsh-purge.bak`，
+    断言被删掉、且 `dsh.cmd` 一个字节没变（没被当成还原基线）。
+- 全量测试 **41 / 41 pass**（1.1.96 是 39）。
+- 真宿主只读预演：`targetFilePairs(targetFiles(aiBase))` 从 61 条降到 **60 条**，
+  唯一的多 key 项就是那个 preset 文件；把 `resources/runtime/cli/bin` 拷到临时目录跑
+  `sanitizeDesktopCommandRuntimes({dirs:[tmp]})` → `deleted_orphan_bak:dsh.cmd.dsh-purge.bak`，
+  目录里只剩 `dsh.cmd`，且 `dsh.cmd` 内容未变。
+- `assert-patches`：**补丁表仍是 82 条**，`unique_ids=ok changelog=82`；
+  `assert-soul-guard` digest `6320043cad95` 与 1.1.96 一致。
+
+### 还没验的
+
+- `revertAllShims()` 的 dir 循环在桌面面上结构性无事可做（`listShimDirsForPatch()` 对 desktop 返回 `[]`），
+  这一半只能靠注入式测试兜着。
+- flash 五族里的 liangshen / doctor / dshmarket 四族在本机没装，卸载时只会返回 absent/missing。
+- `scheduleCleanupRestart` 重启后真正删插件树那一场没跑（卸载测试只到「进 cleanup 队列」）。
+
 ## 1.1.96-dsh · 2026-10-28 · responses 通路的 developer role 从来没被换过（#57 漏了一条 pattern）
 
 ### 问题
