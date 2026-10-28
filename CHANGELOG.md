@@ -3,6 +3,55 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 / rc.3 兼容变体**。
 上游以 MIT 发布，仍在维护（发版到 1.1.81，`dshTarget: 0.2.0-rc.2`）；本分支跟的是 0.2.1-rc.3。
 
+## 1.1.96-dsh · 2026-10-28 · responses 通路的 developer role 从来没被换过（#57 漏了一条 pattern）
+
+### 问题
+
+- **补丁 #57 在 responses 通路上是空转的。** 它认的原文是
+  `const role = model.reasoning && compat?.supportsDeveloperRole !== false ? "developer" : "system";`，
+  而 0.2.0-rc.2 起的上游 `pi-ai/dist/api/openai-responses-shared.js` 把变量名改成了 **`instructionRole`**。
+  pattern 不匹配 → 这条替换一次都没生效。
+- **而它一直显示 applied。** #57 的 `file` 是 `["pi-ai-completions", "pi-ai-responses-shared"]`，
+  completions 那条（`useDeveloperRole`）命中了，文件里就带上了
+  `[dsh-purge] developer role allowlist: openai/azure` 这个 marker；`skipIfMarked` 与状态汇总只看 marker，
+  于是 **responses 通路的漏清洗被同一条补丁的另一个文件盖住了**。
+- 后果：走 responses API 的第三方中转站仍然收到 `developer` 角色消息，系统提示被静默丢弃。
+  这是 #57 想修的那件事，只在 completions 通路上修住了。
+
+### 改法
+
+- `lib/patches.js` 的 #57 新增两条 `instructionRole` 变体，与原有两条 `role` 变体并存：
+  - 新装：`const instructionRole = ... !== false ? "developer" : "system";` → 加 openai/azure 白名单 + marker
+  - 老用户升级：带 `// [dsh-purge] deepseek.com keeps system role` 尾巴的那条 instructionRole 行 → 升级成白名单
+  - 原有的 `const role = ...` 两条**保留**，供 0.2.0-rc.1 及更早的宿主。
+- 新增回归测试两条（`test/judge.test.mjs`）：把 responses 通路的四种写法（新/旧变量名 × 新装/老用户升级）
+  逐条喂给 `applyReplacementsToText`，断言 `changed === true` 且产物带 marker 与白名单；
+  completions 通路的两态另有一条。
+
+### 验证
+
+- 补丁表仍是 **82 条**，一条没加没删（只给 #57 加了两条 instructionRole 变体）。
+- 全量单元测试 **39 tests / 39 pass**（原 37 + 本轮 2 条）。
+- `node scripts/assert-patches.mjs` → `patches=82 unique_ids=ok changelog=82`。
+- `node scripts/assert-soul-guard.mjs` → digest **`6320043cad95`**，与 1.1.95 一致（没碰注入正文）。
+- 真宿主实测：修复前 profile 那份 `openai-responses-shared.js:131` 是未清洗原文；
+  修复后重跑 `applyPatches` 报 `applied: 1 / already: 1 / missing: 0`，该行已带 allowlist 注释。
+- 重放校验：从 npm 取 pi-ai 1.3.0 pristine，逐条打补丁后与现网三个文件字节比对 → 全部 identical，
+  证明现网文件 == 上游原件 + 补丁表，没有第三方改动残留。
+
+### 顺手补的备份
+
+- profile 的 pi-ai 三份文件一直没有 `.dshpurge.bak`（desktop 的 `node_modules` 是 junction，
+  指向 pack-test，pnpm 重链后目标被重新物化成上游原件，备份就跟着没了）。
+  用 npm 的 pi-ai 1.3.0 pristine 补回三份 bak —— 重放校验已证「pristine + 补丁 == 现网」，pristine 就是真基线。
+- 资源树里那三份老 bak 是**更早一个构建**的产物（比 npm 1.1.0 还少一行 `parseStreamingJson`），
+  拿它们还原会把文件降级。所以补 bak 用的是 npm 原件，不是从老 bak 抄。
+
+### 还没验的（照旧）
+
+- 真宿主上跑一次完整卸载（`revertAllShims` / `revertCmdFlash` 仍只在注入式测试里覆盖）。
+- 宿主升级时 `refreshStaleBaksForUpgrade` 刷新 bak 那一场（等 0.2.2，先跑 `scripts/check-bak-judge.mjs` 预演）。
+
 ## 1.1.95-dsh · 2026-10-28 · 砍掉演练台、core.js 拆成四块、认社区 Electron 端
 
 ### 变更
