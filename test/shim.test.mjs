@@ -119,6 +119,25 @@ test("sanitizeDesktopCommandRuntimes 只动本插件的产物", () => {
   // 测试里造不出密封目录）——那一段靠 1.1.93 的卸载测试与线上状态核对兜着。
 });
 
+test("连字符孤儿 bak（.dsh-purge.bak）只删不还原", () => {
+  // repairOfficialCliAfterUnpack 写的是 dsh.cmd.dsh-purge.bak（连字符，故意不用 BAK_SUFFIX）：
+  // 它记的是「CLI 指向 app.asar」的修复前版本，解包后 app.asar 可能已不存在，照它还原会把 CLI
+  // 指进空处。以前 revertShim 与 sanitize 的两条正则都匹配不到它，于是永远躺在 cli/bin 里。
+  const dir = fresh("bin-orphan");
+  const cmd = path.join(dir, "dsh.cmd");
+  const GOOD = "@ECHO off\r\nset \"DSHAPP=%~dp0..\\..\\..\\app\"\r\n";
+  const BAD_ASAR = "@ECHO off\r\nset \"DSHAPP=%~dp0..\\..\\..\\app.asar\"\r\n";
+  put(cmd, GOOD);
+  put(cmd + ".dsh-purge.bak", BAD_ASAR);
+
+  const report = core.sanitizeDesktopCommandRuntimes({ dirs: [dir] });
+  assert.equal(report.length, 1);
+  assert.match(report[0].cleaned.join(" "), /deleted_orphan_bak:dsh\.cmd\.dsh-purge\.bak/);
+  assert.equal(fs.existsSync(cmd + ".dsh-purge.bak"), false, "孤儿 bak 没被删掉");
+  // 关键：绝不能按 bak 还原 —— CLI 必须还是指向解包的 app/
+  assert.equal(fs.readFileSync(cmd, "utf8"), GOOD, "孤儿 bak 被当成还原基线用了");
+});
+
 test("revertCmdFlash 摘掉 bin.js 的隐藏控制台注入并清 sidecar", () => {
   const app = fresh("flash-app");
   const binRoot = path.join(app, "dsh");

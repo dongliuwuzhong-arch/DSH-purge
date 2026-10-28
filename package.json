@@ -1,6 +1,6 @@
 {
   "name": "dsh-purge",
-  "version": "1.1.96-dsh",
+  "version": "1.1.97-dsh",
   "description": "DeepSeek Harness 破甲（0.2.1-rc.3 兼容变体）：保留宿主 patch 体系，能力面无损，去掉把人压成工具的格式令。",
   "type": "module",
   "main": "lib/index.js",
@@ -71,7 +71,7 @@
       "zip": "https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2/archive/refs/heads/main.zip",
       "git": "https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2.git"
     },
-    "version": "1.1.96-dsh"
+    "version": "1.1.97-dsh"
   },
   "publishConfig": {
     "access": "public"

@@ -1,89 +1,100 @@
-# 1.1.96-dsh
+# 1.1.97-dsh
 
 > 目标宿主 0.2.1-rc.3（桌面 desktop / Web web 两面具支持）· 补丁表 **82 条**（一条没加没删）
 
 ## 一句话
 
-补丁 #57 在 **responses 通路上一直是空转的** —— 上游把变量名从 `role` 改成了 `instructionRole`，pattern 不匹配，而同一个补丁的 completions 文件带上了 marker，把这条漏清洗盖成了 `applied`。现在两个通路都修住了，并且有回归测试盯着。
+真宿主上把**整趟卸载**跑了一遍（以前只在注入式测试里覆盖），当场揪出两个只在真机上才现形的 bug：**同一文件挂两个 key 会让回滚报一个假的「没有备份」**，以及**`dsh.cmd.dsh-purge.bak` 这份孤儿备份永远清不掉**。两个都修了，各配一条回归测试。
 
-## 问题：一条补丁、两个文件、只修住了一个
+## BUG-A：一个文件、两个 key、一句假警报
 
-#57 `DEEPSEEK_SYSTEM_ROLE` 的目的是**不让第三方中转站收到 `developer` 角色消息**。它同时管两个文件：
+`dsh-web-app/presets/standard.patch.yml` 同时挂在两个 file key 下：
 
-| 通路 | 文件 | 状态 |
+| key | 用它的补丁 |
+| --- | --- |
+| `agent-preset` | #4 SYSTEM_PROMPT_PERSONA |
+| `preset-standard` | #24 PRESET_FETCH_ENABLED / #43 WEB_PRESET_IDENTITY_STRIP / #63 OFFICIAL_PLAN_MODE_NEUTRAL |
+
+`targetFilePairs()` 以前只按 `Object.entries` 纯展开、**不按路径去重**，同一条路径产出两条记录。
+`revertAll()` 处理第一条时 `copyFile(bak, fp)` + `unlink(bak)` 把 bak 消耗掉，第二条再来就 bak 不存在
+→ 落进 `noBackup`。报告上写着「1 个目标没有备份」，**其实备份一直在、也已经用掉了**。
+
+真宿主卸载时它报的就是 `noBackup: 1`，而且报的正是这个文件。这一条如果没人当场跑，会一直挂在状态面板上
+当成「备份缺口」，下一版再去「补备份」就是白忙。
+
+### 改法
+
+- `targetFilePairs()` 按 `path.resolve(fp).toLowerCase()` 归并，产出 `{ key, keys, path }` —— 命中几个 key 就带几个。导出它，好让测试钉住。
+- 新增内部 `patchesForKeys(key)`：key 收字符串或数组，跨全部 key 汇总补丁并去重。
+- `targetLooksPatched(text, key)` / `keyIsNoop(text, key, fp)` 改走它，**判据本身不变**：
+  任一 `originalStillThere` → 没打过；任一 marker / replacement → 有痕迹；`keyIsNoop` 要求全部 unchanged。
+- 四个调用点（`inspectStaleBaks` 的 keyByPath、`backupAll`、`backupGap`、`revertAll`）改传 `keys`。
+
+## BUG-B：孤儿 bak，只删不还原
+
+`lib/desktop.js` 的 `repairOfficialCliAfterUnpack()` 在改写官方 CLI 前存一份 `dsh.cmd.dsh-purge.bak`
+（**连字符**），而清理侧只认 `BAK_SUFFIX = ".dshpurge.bak"`（无连字符）：
+
+| 检查点 | 认的后缀 | 能匹配到吗 |
 | --- | --- | --- |
-| completions | `pi-ai/dist/api/openai-completions.js` | 命中，一直有效 |
-| responses | `pi-ai/dist/api/openai-responses-shared.js` | **pattern 不匹配，从未生效** |
+| `revertShim()` | `.dshpurge.bak` | 否 |
+| `sanitizeDesktopCommandRuntimes()` | `/\.dshpurge\.bak$/i` 与 `/\.dshpurge\./i` | 否 |
 
-- 上游 0.2.0-rc.2 起，responses 那行的变量名是 `instructionRole`：
-  `const instructionRole = model.reasoning && compat?.supportsDeveloperRole !== false ? "developer" : "system";`
-  而 #57 里写的 pattern 是 `const role = ...`。
-- 它却一直显示 `applied`：`skipIfMarked` 与状态汇总只看 **marker**，而 marker 是 completions 那条打上去的。
-  **一个文件命中，整条补丁就算过了** —— 这是判据本身的盲区，不是这条补丁独有的。
-- 后果：走 responses API 的中转站仍然拿到 `developer` 角色，系统提示被静默丢弃。
-  审查实验证实过差值：同样内容 `system` 计 117 tokens、`developer` 只 87 tokens，差的正好是指令本身。
+第二重成因：它所在的 `resources/runtime/cli/bin` 既不以 `/bin` + `host-commands|runtime-commands|dsh desktop`
+命中 `isSealedRuntimeDir()`，也不是 `listDesktopCommandRuntimeDirs()` 的成员 —— sanitize 的默认遍历范围**压根走不到那个目录**。
+所以整趟卸载跑完，它还在原地。
 
-## 改法
+### 改法
 
-`lib/patches.js` 的 #57 在原有两条 `const role = ...` 之外**并存**两条 `instructionRole` 变体：
+- `sanitizeDesktopCommandRuntimes()` 默认目录改成 `[...listDesktopCommandRuntimeDirs(), findDesktopShimDir()]`，按规范化路径去重；
+  新增 `/\.dsh-purge\.bak$/i` 分支，记 `deleted_orphan_bak:<name>`。
+- **只删、绝不还原。** 那份 bak 记的是「CLI 指向 `app.asar`」的修复前版本，而解包后 `app.asar` 可能已经不存在
+  （本机就只有解包的 `app/`），照它还原会把 CLI 指进空处。所以 `desktop.js` 那边**保持连字符不动**，
+  只补了注释说明这是故意的。
 
-- 新装：`const instructionRole = ... !== false ? "developer" : "system";` → 加 `api.openai.com` / `azure.com` 白名单 + marker
-- 老用户升级：带 `// [dsh-purge] deepseek.com keeps system role` 尾巴的 instructionRole 行 → 升级成白名单
+## 验证记录（本机实测，非推测）
 
-旧的 `role` 两条**没删**，供 0.2.0-rc.1 及更早的宿主。四条互不重叠，谁命中算谁的。
-
-回归测试两条（`test/judge.test.mjs`）：
-
-- responses 通路的四种写法（新/旧变量名 × 新装/老用户升级）逐条喂 `applyReplacementsToText`，
-  断言 `changed === true` 且产物同时带 marker 与白名单；
-- completions 通路的两态另有一条，防止改 responses 时把它碰坏。
-
-## 顺手补的备份
-
-profile 的 pi-ai 三份文件一直没有 `.dshpurge.bak`。原因：`profiles/desktop/node_modules` 是 junction，
-realpath 落在 `profiles/pack-test/node_modules`，pnpm 重链后目标被重新物化成上游原件，备份跟着就没了。
-
-用 npm 的 **pi-ai 1.3.0 pristine** 补回三份 bak。依据是重放校验：从 npm 取 pristine，逐条打补丁后与现网三个文件
-**字节一致** —— 所以 pristine 就是真正的还原基线。
-
-⚠️ 资源树里那三份老 bak（Oct 27 22:27）是**更早一个构建**的产物，比 npm 1.1.0 还少一行 `parseStreamingJson`。
-从它们还原会把文件降级。**别拿老 bak 当基线。**
+- 全量测试 **41 / 41 pass**（1.1.96 是 39，本轮 +2）
+- 真宿主只读预演：`targetFilePairs(targetFiles(aiBase))` 从 **61 条降到 60 条**，唯一的多 key 项就是那个 preset 文件
+- 把 `resources/runtime/cli/bin` 拷到临时目录跑 `sanitizeDesktopCommandRuntimes({dirs:[tmp]})`
+  → `deleted_orphan_bak:dsh.cmd.dsh-purge.bak`，目录里只剩 `dsh.cmd`，且 **`dsh.cmd` 一个字节没变**
+- `patches=82 unique_ids=ok changelog=82`；灵魂闸门 `digest 6320043cad95`（与 1.1.95 / 1.1.96 一致）
+- 卸载实测本体（1.1.96 那趟）：`revertAll` 还原 55 / skipped 3 / noBackup 1 / noop 3 / errors 0；
+  `revertHideConsoleFromBin` 真的剥掉了 `dsh/lib/bin.js` 的 import 行；override 删除、rules 删除、
+  profile 依赖摘除、redteam 预设迁移、bak manifest 写出、cleanup 队列生成 —— 全部按预期。
+  卸载前后用字节级快照（61 live + 61 bak + 8 extras）全量回滚，`shaMismatch/bakMismatch/extraMismatch` 全空。
 
 ## 怎么自查（两分钟，不改任何文件）
 
 ```sh
 node scripts/assert-patches.mjs        # 期望 patches=82 unique_ids=ok changelog=82
 node scripts/assert-soul-guard.mjs     # 期望 digest 6320043cad95
-node --test "test/**/*.test.mjs"       # 期望 39 条全过
+node --test test/*.test.mjs            # 期望 41 条全过
 ```
 
-想确认 responses 通路真的被清洗了，直接看文件：
+想确认孤儿 bak 真的会被清掉，看这个目录：
 
 ```sh
-grep -n "instructionRole" ~/.dsh/profiles/desktop/node_modules/@earendil-works/pi-ai/dist/api/openai-responses-shared.js
+ls "C:\Software\DSH\resources\runtime\cli\bin"
 ```
 
-带 `// [dsh-purge] developer role allowlist: openai/azure` 就是清洗过了；只有裸的 `? "developer" : "system";` 就是没打上。
+正常应该只剩 `dsh.cmd`。如果还有 `dsh.cmd.dsh-purge.bak`，那是**旧版留下的**，升级到 1.1.97 后跑一次卸载/清洗就会删掉
+（只删，不会拿它还原）。
 
-## 验证记录（本机实测，非推测）
+## 还没验的（照旧写在这儿，不粉饰）
 
-- 单元测试 **39/39**（原 37 + 本轮 2 条）
-- `patches=82 unique_ids=ok changelog=82`；灵魂闸门 `digest 6320043cad95`（与 1.1.95 一致）
-- 真宿主：修复前 profile 的 `openai-responses-shared.js:131` 是未清洗原文；修复后重跑 `applyPatches`
-  报 `applied: 1 / already: 1 / missing: 0`，该行已带 allowlist 注释
-- 重放校验：npm pi-ai 1.3.0 pristine + 补丁表 == 现网三个文件，全部 identical
-
-## 还没验的两件事（照旧写在这儿，不粉饰）
-
-1. **真宿主上没跑过整趟卸载。** `revertAllShims` / `revertCmdFlash` 两段仍只在注入式测试里覆盖。
-2. **真宿主升级时 bak 刷新那一场仍未验。** 判据错一次就会把干净的备份一次性污染，不可逆。
+1. **`revertAllShims()` 的 dir 循环**在桌面面上结构性无事可做 —— `listShimDirsForPatch()` 对 desktop 返回 `[]`，
+   这一半只能靠注入式测试兜着。
+2. **flash 五族里的 liangshen / doctor / dshmarket 四族**本机没装，卸载时只会返回 absent/missing，等于没验。
+3. **`scheduleCleanupRestart` 重启后真正删插件树**那一场没跑（卸载测试只到「进 cleanup 队列」）。
+4. **宿主升级时 bak 刷新那一场仍未验。** 判据错一次就会把干净的备份一次性污染，不可逆。
    先跑 `node scripts/check-bak-judge.mjs` 预演，等宿主 0.2.2 出来再说。
 
 ## 资产
 
 | 项 | 值 |
 | --- | --- |
-| 包 | `dsh-purge-1.1.96-dsh.zip` |
+| 包 | `dsh-purge-1.1.97-dsh.zip` |
 | 目标宿主 | 0.2.1-rc.3（desktop / web） |
 | 补丁表 | 82 条 |
 | 大小 / sha256 | 见 Release 与 GitHub digest（`git archive` 打包，每次构建可能不同） |

@@ -14,8 +14,16 @@ const aiBase = path.join(root, "ai");
 const target = path.join(aiBase, "dsh-agent-instructions", "lib", "index.js");
 const bak = target + ".dshpurge.bak";
 
-const { ALL_PATCHES, applyPatches, backupAll, revertAll, refreshStaleBaksForUpgrade, targetLooksPatched } =
-  await import("../lib/core.js");
+const {
+  ALL_PATCHES,
+  applyPatches,
+  backupAll,
+  revertAll,
+  refreshStaleBaksForUpgrade,
+  targetLooksPatched,
+  // targetFilePairs 是按路径去重的那一层，多 key 同路径的回归就钉在这里。
+  targetFilePairs,
+} = await import("../lib/core.js");
 
 const patch1 = ALL_PATCHES.find((p) => p.id === 1);
 const rep = patch1.replacements[0];
@@ -95,6 +103,35 @@ test("假升级：现网换了内容且无补丁痕迹 → bak 刷新到新内�
   const refreshed = refreshStaleBaksForUpgrade(aiBase);
   assert.ok(refreshed.some((p) => lower(p) === lower(target)), "没有识别为过期 bak");
   assert.ok(fs.readFileSync(bak).equals(fs.readFileSync(target)), "bak 没刷新到现网内容");
+});
+
+test("同一文件挂在两个 file key 下：bak 只建一份，回滚不报假缺口", async () => {
+  // dsh-web-app/presets/standard.patch.yml 同时挂在 agent-preset（#4）与
+  // preset-standard（#24/#43/#63）下。以前 targetFilePairs 纯展开不去重，
+  // revertAll 第一条把 bak 消耗掉，第二条就报 noBackup —— 假的「丢了备份」。
+  fs.rmSync(aiBase, { recursive: true, force: true });
+  const dual = path.join(aiBase, "dsh-web-app", "presets", "standard.patch.yml");
+  const original = "presets:\n  standard:\n    prefix: You are a coding agent powered by the {{model}} model.\n";
+  put(dual, original);
+
+  const files = { "agent-preset": dual, "preset-standard": [dual] };
+  const pairs = targetFilePairs(files);
+  assert.equal(pairs.length, 1, "同一个路径被摊成了多条：" + JSON.stringify(pairs));
+  assert.deepEqual(pairs[0].keys, ["agent-preset", "preset-standard"], "keys 没合并");
+
+  const b = await backupAll(aiBase);
+  assert.deepEqual(b.errors, []);
+  assert.equal(fs.existsSync(dual + ".dshpurge.bak"), true, "没有建 bak");
+
+  // 让 live 与 bak 不同，才走得到 copyFile 那条回滚分支（这条测的是去重，不是补丁内容）。
+  put(dual, "presets:\n  standard:\n    prefix: \"\"\n");
+
+  const back = await revertAll(aiBase);
+  assert.deepEqual(back.errors, []);
+  assert.deepEqual(back.noBackup, [], "报了假的 noBackup：" + JSON.stringify(back.noBackup));
+  assert.ok(back.reverted.some((p) => lower(p) === lower(dual)), "没走回滚分支：" + JSON.stringify(back));
+  assert.equal(fs.readFileSync(dual, "utf8"), original, "回滚后与原始内容不一致");
+  assert.equal(fs.existsSync(dual + ".dshpurge.bak"), false, "回滚后 bak 应该被删掉");
 });
 
 test("假升级：现网仍是我们打过的版本 → bak 保持原样（不污染干净备份）", async () => {
