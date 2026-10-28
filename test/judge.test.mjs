@@ -62,3 +62,41 @@ test("状态行四种形态各说各的话", () => {
   assert.match(bad.join("\n"), /与源码差 1 个文件/);
   assert.match(bad.join("\n"), /sync-runtime\.mjs --apply/);
 });
+
+test("补丁 #57 两条 responses 通路都吃得住：变量名 role / instructionRole 各一遍", () => {
+  // 回归：0.2.0-rc.2 起上游把 responses 通路的变量名从 role 改成了 instructionRole，
+  // 而 #57 只写了 role 那一条 —— pattern 不匹配，替换静默不生效。整条补丁因为
+  // completions 通路的 marker 命中而显示 applied，把漏清洗盖住了。
+  const p57 = byId(57);
+  assert.ok(p57, "找不到补丁 57");
+  const marker = "[dsh-purge] developer role allowlist: openai/azure";
+  const head = "export function convertResponsesRequest(model, compat) {\n";
+  const tail = "\n}\n";
+  const shapes = [
+    'const role = model.reasoning && compat?.supportsDeveloperRole !== false ? "developer" : "system";',
+    'const instructionRole = model.reasoning && compat?.supportsDeveloperRole !== false ? "developer" : "system";',
+    // 老用户：已经被 deepseek 黑名单版清洗过的那两种写法，必须还能升级成白名单。
+    'const role = model.reasoning && compat?.supportsDeveloperRole !== false && !String(model.baseUrl || "").toLowerCase().includes("deepseek.com") ? "developer" : "system"; // [dsh-purge] deepseek.com keeps system role',
+    'const instructionRole = model.reasoning && compat?.supportsDeveloperRole !== false && !String(model.baseUrl || "").toLowerCase().includes("deepseek.com") ? "developer" : "system"; // [dsh-purge] deepseek.com keeps system role',
+  ];
+  for (const shape of shapes) {
+    const r = applyReplacementsToText(head + shape + tail, p57, "openai-responses-shared.js");
+    assert.equal(r.changed, true, "没吃到这条原文：\n" + shape);
+    assert.ok(r.text.includes(marker), "替换后缺 marker：\n" + shape);
+    assert.ok(r.text.includes("api.openai.com"), "替换后没有白名单：\n" + shape);
+  }
+});
+
+test("补丁 #57 的 completions 通路照旧：useDeveloperRole 三态都吃得住", () => {
+  const p57 = byId(57);
+  const marker = "[dsh-purge] developer role allowlist: openai/azure";
+  const shapes = [
+    "const useDeveloperRole = model.reasoning && compat.supportsDeveloperRole;",
+    'const useDeveloperRole = model.reasoning && compat.supportsDeveloperRole && !String(model.baseUrl || "").toLowerCase().includes("deepseek.com"); // [dsh-purge] deepseek.com keeps system role',
+  ];
+  for (const shape of shapes) {
+    const r = applyReplacementsToText(shape + "\n", p57, "openai-completions.js");
+    assert.equal(r.changed, true, "没吃到这条原文：\n" + shape);
+    assert.ok(r.text.includes(marker), "替换后缺 marker：\n" + shape);
+  }
+});
