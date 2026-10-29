@@ -26,7 +26,15 @@ node --test "test/**/*.test.mjs"
 
 ## 安装
 
-这个包不在 npm 上，使用仓库压缩包、本地目录或手动安装。完整步骤见 [README.zh-CN.md](README.zh-CN.md) / [README.md](README.md)。
+这个包不在 npm 上，使用仓库压缩包、本地目录或手动安装。新增离线安装器，不跑 pnpm、不联网、不自动 Apply：
+
+```sh
+node scripts/install-offline.mjs --profile desktop --dsh-home "$HOME/.dsh" --dry-run
+node scripts/install-offline.mjs --profile desktop --dsh-home "$HOME/.dsh"
+node scripts/install-offline.mjs --verify --profile desktop --dsh-home "$HOME/.dsh"
+```
+
+完整步骤见 [README.zh-CN.md](README.zh-CN.md) / [README.md](README.md)。
 
 ## 尚未验证
 

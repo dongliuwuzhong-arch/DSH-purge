@@ -92,6 +92,24 @@ If the install still has `resources/app.asar`, replace `resources/app/` with `re
 dsh plugin --profile web add <this repo archive or main.tar.gz URL>
 ```
 
+### Offline install (recommended)
+
+The repository ships an installer that does not run pnpm, does not use the network, and does not apply patches:
+
+```sh
+node scripts/install-offline.mjs --profile desktop --dsh-home "$HOME/.dsh" --dry-run
+node scripts/install-offline.mjs --profile desktop --dsh-home "$HOME/.dsh"
+node scripts/install-offline.mjs --verify --profile desktop --dsh-home "$HOME/.dsh"
+```
+
+Or install directly from a zip:
+
+```sh
+node scripts/install-offline.mjs --zip dsh-purge-1.1.97-dsh.zip --profile desktop --dsh-home "$HOME/.dsh"
+```
+
+The installer validates the package, copies it to `$DSH_HOME/plugins/dsh-purge`, updates the profile `package.json`, links `node_modules/dsh-purge`, and writes `desktop-install.txt`. It does **not** run pnpm, Apply, or restart DSH.
+
 ### Manual install
 
 1. Find the `$DSH_HOME` the running host actually uses. It must contain `profiles/`, and `profiles/<web|desktop>/package.json` must have `"name": "dsh-profile-web"` or `"dsh-profile-desktop"`.
@@ -99,10 +117,10 @@ dsh plugin --profile web add <this repo archive or main.tar.gz URL>
 3. Edit only that profile's `package.json`:
    - Add `"dsh-purge": "file:../../plugins/dsh-purge"` to `dependencies`.
    - Append `"dsh-purge"` to `dsh.profile.bundles`.
-4. In that profile directory, run:
+4. Create the link (Windows Junction):
 
-```sh
-pnpm install
+```powershell
+New-Item -ItemType Junction -Path "$env:USERPROFILE\.dsh\profiles\desktop\node_modules\dsh-purge" -Target "$env:USERPROFILE\.dsh\plugins\dsh-purge"
 ```
 
 5. Fully quit and reopen the host, then click **dsh-purge → Clean → Apply**.

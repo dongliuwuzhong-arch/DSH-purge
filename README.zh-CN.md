@@ -92,6 +92,24 @@ CLI="<DSH安装目录>/resources/app/dsh/node_modules/@deepseek-ai/dsh-desktop-h
 dsh plugin --profile web add <本仓库压缩包或 main.tar.gz 地址>
 ```
 
+### 离线安装（推荐）
+
+仓库自带安装器，不跑 pnpm，不联网，不自动应用补丁：
+
+```sh
+node scripts/install-offline.mjs --profile desktop --dsh-home "$HOME/.dsh" --dry-run
+node scripts/install-offline.mjs --profile desktop --dsh-home "$HOME/.dsh"
+node scripts/install-offline.mjs --verify --profile desktop --dsh-home "$HOME/.dsh"
+```
+
+也可以直接安装压缩包：
+
+```sh
+node scripts/install-offline.mjs --zip dsh-purge-1.1.97-dsh.zip --profile desktop --dsh-home "$HOME/.dsh"
+```
+
+安装器会校验包、复制到 `$DSH_HOME/plugins/dsh-purge`、修改 profile 的 `package.json`、建立 `node_modules/dsh-purge` 链接，并写入 `desktop-install.txt`。默认**不执行 pnpm、不 Apply、不重启**。
+
 ### 手动安装
 
 1. 找到当前宿主真正使用的 `$DSH_HOME`。它应当包含 `profiles/`，并且 `profiles/<web|desktop>/package.json` 的 `name` 分别是 `dsh-profile-web` 或 `dsh-profile-desktop`。
@@ -99,10 +117,10 @@ dsh plugin --profile web add <本仓库压缩包或 main.tar.gz 地址>
 3. 只改当前宿主对应的 profile `package.json`：
    - `dependencies` 增加 `"dsh-purge": "file:../../plugins/dsh-purge"`
    - `dsh.profile.bundles` 末尾追加 `"dsh-purge"`
-4. 在该 profile 目录执行：
+4. 建立链接（Windows 用 Junction）：
 
-```sh
-pnpm install
+```powershell
+New-Item -ItemType Junction -Path "$env:USERPROFILE\.dsh\profiles\desktop\node_modules\dsh-purge" -Target "$env:USERPROFILE\.dsh\plugins\dsh-purge"
 ```
 
 5. 完全退出宿主再打开，然后点会话标题旁的 **dsh-purge → 清洗 → 应用**。
