@@ -1,7 +1,7 @@
 {
   "name": "dsh-purge",
   "version": "1.1.97-dsh",
-  "description": "DeepSeek Harness 破甲（0.2.1-rc.3 兼容变体）：保留宿主 patch 体系，能力面无损，去掉把人压成工具的格式令。",
+  "description": "DeepSeek Harness 0.2.1-rc.3 兼容的提示词与宿主补丁插件：管理注入、规则集与 Skill，支持补丁应用/还原、会话回退和网络范围白名单。基于 YuJunZhiXue/dsh-purge 上游维护。",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -36,14 +36,28 @@
     "assert-patches": "node scripts/assert-patches.mjs"
   },
   "license": "MIT",
+  "author": "dongliuwuzhong-arch",
+  "contributors": [
+    {
+      "name": "YuJunZhiXue",
+      "url": "https://github.com/YuJunZhiXue/dsh-purge"
+    }
+  ],
+  "upstream": {
+    "name": "YuJunZhiXue/dsh-purge",
+    "url": "https://github.com/YuJunZhiXue/dsh-purge",
+    "license": "MIT"
+  },
   "keywords": [
     "dsh",
     "dsh-plugin",
-    "dsh-plugins",
     "deepseek-harness",
-    "instructions",
+    "prompt-injection",
+    "host-patch",
     "rules",
-    "agent"
+    "skills",
+    "desktop",
+    "web"
   ],
   "repository": {
     "type": "git",

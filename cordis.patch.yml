@@ -1,10 +1,9 @@
-# dsh-purge bundle patch（0.2.1-rc.2 兼容变体）
+# dsh-purge bundle patch（0.2.1-rc.3 兼容分支）
 #
-# 清洗（宿主 patch + 破甲提示词）留在本插件内；红队演练台已移除
-# （不再含 lib/redteam、presets/redteam、skills/redteam）。
-# 只装 dsh-purge，不外接、不 link 其它包。
+# 提示词注入与宿主补丁由本插件提供；旧版兼容禁用项保留在下方。
+# 只安装 dsh-purge 本身，不 link 其它包。
 
-# 关掉旧的独立红队包行（若用户以前装过 dsh-redteam-mode）
+# 关掉旧版独立包行（若用户以前装过对应插件）
 - id: redteam-store
   name: dsh-redteam-store
   disabled: true
