@@ -1,46 +1,52 @@
-# 1.1.97-dsh
+# 1.1.99-dsh
 
 目标宿主：DeepSeek Harness **0.2.1-rc.2 / 0.2.1-rc.3**（桌面 / Web）
 
-补丁表：**82 条定义**
+补丁表：**82 条定义**（本版未增删补丁）
 
 ## 本版变更
 
-- 修复同一文件挂两个 key 时回滚误报“没有备份”的问题。现在按规范化路径归并，避免第二次处理同一文件时把已被消耗的备份当成缺失。
-- 修复 `dsh.cmd.dsh-purge.bak` 孤儿备份清理不掉的问题。清理范围包含桌面 shim 目录，并识别 `.dsh-purge.bak`；只删除，不用于还原。
-- 补丁表保持 82 条，新增两条回归测试。
-- 更新中文 / 英文 README、包描述和兼容说明，明确本仓库相对上游的维护范围。
+- **升级不再打回原型**：官方升级重打完，若 asar 仍密封，自动用 PowerShell 换包并重开。
+- 新增配置 `autoSwapAfterUpgrade`（默认 true）；设 false 退回"只写盘不换包"。
+- 新增 `shouldSwapAfterUpgrade()` 与 5 条回归测试。
 
 ## 验证
 
 ```sh
-node scripts/assert-patches.mjs
-# patches=82 unique_ids=ok changelog=82
-
-node scripts/assert-soul-guard.mjs
-node --test "test/**/*.test.mjs"
-# 41 / 41 pass
+node scripts/assert-patches.mjs   # patches=82 unique_ids=ok changelog=82
+node --test test/*.test.mjs       # 52 / 52 pass
 ```
-
-本机只读预演结果：`targetFilePairs()` 从 61 条降到 60 条，唯一的多 key 项是 preset 文件；桌面 shim 目录清理测试能删除 `dsh.cmd.dsh-purge.bak`，且不改动 `dsh.cmd`。
-
-## 安装
-
-这个包不在 npm 上，使用仓库压缩包、本地目录或手动安装。新增离线安装器，不跑 pnpm、不联网、不自动 Apply：
-
-```sh
-node scripts/install-offline.mjs --profile desktop --dsh-home "$HOME/.dsh" --dry-run
-node scripts/install-offline.mjs --profile desktop --dsh-home "$HOME/.dsh"
-node scripts/install-offline.mjs --verify --profile desktop --dsh-home "$HOME/.dsh"
-```
-
-完整步骤见 [README.zh-CN.md](README.zh-CN.md) / [README.md](README.md)。
 
 ## 尚未验证
 
-- 桌面壳 `resources/app/lib/main.js` 的补丁只能在真实安装上验证。
-- 宿主升级时备份判据和 `app.asar` 交接仍需在对应版本实测。
-- 部分可选包未安装时，对应补丁只会显示跳过或 `missing_file`。
+- 真实官方升级没跑过（当前没有新版本），行为待下一次升级检验。
+
+---
+
+# 1.1.98-dsh
+
+目标宿主：DeepSeek Harness **0.2.1-rc.2 / 0.2.1-rc.3**（桌面 / Web）
+
+补丁表：**82 条定义**（本版未增删补丁，只改判据与诊断）
+
+## 本版变更
+
+- 修 #26 假绿：markers 命中不再等于 applied，还留一条非幂等 replacement 就如实报 pending。
+- 修重启闸门：只有落在宿主 app 目录里的 pending 才挡重启，且报错点名是哪一条。
+- 修 surface 判定：入参给了身份字段就按隔离判定算，不再拿本进程的 resourcesPath/argv 去顶。
+- 新增 6 条回归测试。
+
+## 验证
+
+```sh
+node scripts/assert-patches.mjs      # patches=82 unique_ids=ok changelog=82
+node --test test/*.test.mjs          # 47 / 47 pass
+```
+
+## 尚未验证
+
+- 宿主外 pending 放宽阻断之后，面板还没有展示项（后续版本补）。
+- 桌面壳上重新 pack asar 的路径本版未触碰。
 
 ## 上游
 

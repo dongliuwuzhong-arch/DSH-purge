@@ -3,6 +3,105 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 / rc.3 兼容变体**。
 上游以 MIT 发布，仍在维护（发版到 1.1.81，`dshTarget: 0.2.0-rc.2`）；本分支跟的是 0.2.1-rc.3。
 
+## 1.1.99-dsh · 2026-10-30 · 升级不再打回原型：重打之后真换包
+
+### 问题
+
+- **官方升级后，补丁写了，但宿主读不到。** 升级后的启动自愈走 `reapplyInstalled({scheduleSwap:false})`
+  → `openSealedDesktopHost({upgrade:true})` 从新 `app.asar` 重新解包、补丁全打在新 `resources\app` 上，
+  然后……就没有然后了：桌面壳上 `settleMayRestart()` **恒返回 false**（防 `INACTIVE_EFFECT`），
+  于是 `return "reapplied-no-restart"`，宿主继续读新的 `app.asar`。
+  用户看到的就是"一升级，破甲全部失效，面板还绿着"。
+- 顺带暴露的老问题：真正能换包的 `restartSealedDesktopIfNeeded()`（外部 PowerShell 杀进程 + 挪 asar + 重开）
+  一直存在、也被「应用」按钮用着，但**升级这条路上没人调它**。
+
+### 改法
+
+- `lib/reapply.js`：新增并导出 `shouldSwapAfterUpgrade({ sealed, ok, disabled })`——
+  "重打成功 **且** asar 仍密封 **且** 没被配置关掉"才换包。
+- `lib/index.js`：升级分支在 `clearUpgradeMarker` 之后判这条，成立就延迟 3 秒调
+  `core.restartSealedDesktopIfNeeded({ ctx })` 并返回 `"restarting-asar-swap"`。
+  延迟是给宿主把这一轮启动跑完留时间，别在渲染中途被 500ms 的 PowerShell 干掉。
+- `lib/index.js`：新增配置 `autoSwapAfterUpgrade`（默认 `true`）。设成 `false` 就退回旧行为：
+  只写盘不换包（补丁失效，但启动更"安静"）。
+
+### 这条链路长什么样（升级时实际发生的）
+
+```
+官方更新器下载完 → 宿主的 dshPurgeHandoffDesktopUpdate()（#45/#46 打的补丁）
+  → 生成 WSH：杀 DSH → 把 resources\app 挪成 .dshpurge-prev → 从 .bak 恢复 app.asar
+  → 静默跑安装包（--updated /S）→ 写 resources\dsh-purge-reapply-asar 标记 → 重开 exe
+下次启动 → 见到标记 → 从**新 asar** 解包 + 重打全部补丁
+  → 本版新增：判断 asar 仍密封 → 3 秒后 PowerShell 杀进程、把 asar 改名、重开
+  → 新进程读 resources\app（打过补丁的那份），升级自愈完成
+```
+
+### 验证
+
+- 新增 `test/upgrade.test.mjs` 5 条：密封+成功→换；已换过→不换；失败→不换；配置关→不换；参数缺失→不换。
+- **全量 52 / 52 pass**（1.1.98 是 47）。
+- `assert-patches`：补丁表 **82 条**不变，`unique_ids=ok changelog=82`。
+
+### 未验证
+
+- **这条链路没有真的跑过一次官方升级**（没有新版本可升）。逻辑按代码走通，行为待下一次真实升级检验。
+  真升级那天先看 `%TEMP%\dsh-purge-official-update.log` 与 `C:\Software\DSH\_diag-asar-swap.log`。
+- 手动下载安装包（不走官方更新器）的同学走不到这条，用 `tools/upgrade-heal.mjs` 补一刀。
+
+## 1.1.98-dsh · 2026-10-30 · 判据不再自欺：markers 命中也要看活干完没有
+
+### 问题（三个都是同一类毛病：**判据说一套，实际按另一套**）
+
+- **BUG-A：markersAny 命中就算 applied，插入块丢了照样绿（#26 假绿）。**
+  `filePatchOutcome()` 先问 markers，命中立刻返回 applied，**根本不再看那条插入还该不该做**。
+  #26 `MINIMAL_PERSONA_PURGE` 的 markers 里有一条是"persona 行被我改过"——它只证明改了一半：
+  `prefix`/`complete` 确实改了，`agent-instructions` 那一块从来没插进去，面板绿了很久。
+  这不是 #26 一家的问题：任何 `markersAny` 的补丁只要留下一条没落盘的 replacement，都会被盖住。
+- **BUG-B：一条永远打不上的 pending 能把「重启」永久废掉。**
+  `ensureHostClean()` 只要 `pending > 0` 就返回「清洗没有完成，已取消重启」，
+  **不说是哪一条、也不看它改的是不是正在运行的那份文件**。#71 改的是 profile 里第三方包
+  （梁神预设）的身份行，跟宿主重启八竿子打不着，却每次都把重启挡下来。报错还只剩一句
+  没有主语的「清洗没有完成」。
+- **BUG-C：判定函数混用显式入参与本进程环境，在 Electron 里判什么都成 desktop。**
+  `isDesktopSurface()` 收着调用方传进来的 execPath/versions，却对没传的
+  `resourcesPath`/`argv` 回落到 `process.*`。于是"纯 node 语义"的判定一旦跑在 Electron 里，
+  永远命中 `resourcesLookLikeDesktopInstall` → desktop。测试环境里红了两年（本次才发现是两回事）。
+
+### 改法
+
+- `lib/core.js`：新增 `staleActionableReplacement()`——只认"真会改内容"的残留：
+  幂等残留（`replace` 里本来就包着 `pattern`，#42/#45/#46 那类）不算。
+  `filePatchOutcome` 改名为 `patchFileOutcome` 并**导出**（可单测），判据变成：
+  结算了但还有非幂等残留 → `pending`；声明 `skipIfMarked` 的维持 `applied`。
+- `lib/core.js`：`ensureHostClean()` 重写诊断。pending 现在连目标文件一起取出来
+  （`pendingDetailAcross`），只有**目标落在宿主 app 目录里**的才挡重启
+  （`pendingInsideHost` / `hostRootOfAiBase`）；挡的时候报错点名：
+  `清洗没有完成，已取消重启 —— 宿主里还有 1 条补丁没落盘：#26 MINIMAL_PERSONA_PURGE`。
+  宿主外的 pending 只记在返回值 `pendingOutsideHost` 里，不拦。
+- `lib/surface.js`：新增 `inputOrAmbient()`。入参里出现任何一个身份字段
+  （execPath / resourcesPath / argv / versions / env / parentPort），就按隔离判定算——
+  没给的一律当空，不再拿本进程的真实值顶上来。一个都不给（真宿主 `detectSurface()`）
+  才回落 `process.*`。
+
+### 验证
+
+- 新增 6 条回归测试（`test/judge.test.mjs`）：markers 命中但插入没落 → pending；
+  真落盘 → applied 且再跑不变；幂等残留不算残留；`skipIfMarked` 不翻 pending；
+  没结算且原文还在 → pending；原文对不上 → skipped。
+- **全量测试 47 / 47 pass**（1.1.97 是 41）。其中 2 条 `surface` 测试以前在 Electron 里必红，
+  这次是**真修了代码**，不是改断言。
+- `assert-patches`：补丁表 **82 条**，`unique_ids=ok changelog=82`。
+- 真宿主实测：改判据后 82 条的 applied 从 70 → 69，**唯一翻转的是 #26（applied → pending）**，
+  其余 81 条一个没动——说明这条判据是定点，不是把整张表推倒重判。
+
+### 未验证 / 风险
+
+- `patchFileOutcome` 只在"语义能对上"的前提下翻转。如果哪天出现一条补丁，它的
+  replacement 故意留着原文（为了别的用途），会被误报成 pending。真出现时按
+  `skipIfMarked` 标注即可。
+- 宿主外 pending 不拦重启，是这次**新的放宽**：那些补丁确实没落地，但重启也修不好它们，
+  拦着只会让重启永久失效。取舍写在返回值 `pendingOutsideHost` 里，面板可以以后再加显示。
+
 ## 1.1.97-dsh · 2026-10-28 · 卸载当场跑了一遍，揪出两个只在真宿主上才现形的 bug
 
 ### 问题（两个都是 1.1.96 卸载实测跑出来的，不是读代码猜的）

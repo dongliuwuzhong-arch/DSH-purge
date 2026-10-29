@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { ALL_PATCHES, applyReplacementsToText, keyIsNoop, targetLooksPatched } from "../lib/core.js";
+import { ALL_PATCHES, applyReplacementsToText, keyIsNoop, patchFileOutcome, targetLooksPatched } from "../lib/core.js";
 import { hashFile, normalizeText, runtimeSyncLines } from "../lib/runtime-sync.js";
 
 const byId = (id) => ALL_PATCHES.find((p) => p.id === id);
@@ -99,4 +99,61 @@ test("补丁 #57 的 completions 通路照旧：useDeveloperRole 三态都吃得
     assert.equal(r.changed, true, "没吃到这条原文：\n" + shape);
     assert.ok(r.text.includes(marker), "替换后缺 marker：\n" + shape);
   }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 1.1.98 · #26 假绿回归
+// 老判据先问 markers，命中就 applied，**不再看插入块在不在**。markersAny 的补丁只要
+// 改过一半就算做完：#26 的 persona 行改了、agent-instructions 那一块从没插进去，
+// 面板却一直是绿的。下面四条把新判据钉住。
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** 造一条"改一半"的补丁：插入型替换（replace 不包含 pattern），markersAny 只要命中 A 就算过。 */
+const halfPatch = (extra = {}) => ({
+  id: 900,
+  name: "SYNTH_INSERT",
+  file: "synthetic",
+  replacements: [{ pattern: "A\nB", replace: "A\nINSERTED\nB" }],
+  markers: ["A"],
+  markersAny: true,
+  ...extra,
+});
+
+test("判据：markers 命中但插入块没落盘 → pending（#26 假绿）", () => {
+  // 现状：A 还在，B 紧跟其后 —— 正是"只改了一半"的样子
+  assert.equal(patchFileOutcome("A\nB\n", halfPatch(), "preset.yml"), "pending");
+});
+
+test("判据：插入块真的落盘了 → applied，且再跑一遍不再变", () => {
+  const done = "A\nINSERTED\nB\n";
+  assert.equal(patchFileOutcome(done, halfPatch(), "preset.yml"), "applied");
+  const second = applyReplacementsToText(done, halfPatch(), "preset.yml");
+  assert.equal(second.changed, false);
+});
+
+test("判据：幂等残留（replace 里本来就包着 pattern）不算残留", () => {
+  // #42/#45/#46 那类：再打一遍只会在后面再贴一句注释，属空转，不该报 pending
+  const idem = {
+    id: 901,
+    name: "SYNTH_IDEMPOTENT",
+    file: "synthetic",
+    replacements: [{ pattern: "var A = 1;", replace: "var A = 1; // [dsh-purge] x" }],
+    markers: ["// [dsh-purge] x"],
+    markersAny: true,
+  };
+  assert.equal(patchFileOutcome("var A = 1; // [dsh-purge] x\n", idem, "a.js"), "applied");
+});
+
+test("判据：声明 skipIfMarked 的补丁不因残留翻成 pending", () => {
+  assert.equal(patchFileOutcome("A\nB\n", halfPatch({ skipIfMarked: true }), "preset.yml"), "applied");
+});
+
+test("判据：没结算、且原文还在 → pending（老行为不变）", () => {
+  const notYet = { ...halfPatch(), markers: ["NEVER_HERE"] };
+  assert.equal(patchFileOutcome("A\nB\n", notYet, "preset.yml"), "pending");
+});
+
+test("判据：原文对不上、再点也没用 → skipped（老行为不变）", () => {
+  const notYet = { ...halfPatch(), markers: ["NEVER_HERE"] };
+  assert.equal(patchFileOutcome("完全无关的一段文本\n", notYet, "preset.yml"), "skipped");
 });
