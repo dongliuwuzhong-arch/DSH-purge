@@ -30,6 +30,8 @@
     "LICENSE"
   ],
   "scripts": {
+    "install:offline": "node scripts/install-offline.mjs",
+    "install:verify": "node scripts/install-offline.mjs --verify",
     "embed-prompt": "node scripts/embed-default-prompt.mjs",
     "sync-runtime": "node scripts/sync-runtime.mjs --apply",
     "sync-runtime:check": "node scripts/sync-runtime.mjs",
