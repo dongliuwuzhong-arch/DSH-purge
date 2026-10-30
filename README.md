@@ -1,10 +1,20 @@
 # dsh-purge
 
-**DSH 0.2.1-rc.2 / rc.3 / rc.5 compatibility fork · 1.2.0**
+**DSH 0.2.1-rc.2 / rc.3 / rc.5 compatibility fork · 1.2.1**
 
 - Upstream: [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge)
-- This fork: [dongliuwuzhong-arch/dsh-purge-021rc2](https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2)
+- This fork: [dongliuwuzhong-arch/DSH-purge](https://github.com/dongliuwuzhong-arch/DSH-purge)
 
+> 🔴 **Read this first: host patches need a precondition to take effect.**
+>
+> The official desktop build seals its host code in `resources\app.asar`, while patches can only be
+> written into the unpacked `resources\app\`. Electron resolves in the order
+> `app.asar` → `app` → `default_app.asar`, so **as long as the asar exists, the directory is never reached**.
+>
+> "Patches are applied" therefore does not mean "patches are in effect". The only reliable check is
+> whether the status panel still prints `✗ app.asar: still present` — that line means everything is idle.
+>
+> Since 1.2.1 the post-upgrade self-heal is automatic; see [`docs/SEALED-ASAR.md`](docs/SEALED-ASAR.md).
 `dsh-purge` is a prompt and host-patch plugin for a local DeepSeek Harness install. It adds a **Clean** dock beside the session title for managing prompts, rule sets, skills, and host patches. Nothing is written to the host until you explicitly apply it.
 
 This repository is a compatibility fork of the upstream project, tracking DSH **0.2.1-rc.2 / rc.3 / rc.5**. It keeps the upstream patch system and injection flow, and maintains the host-version mappings, desktop path handling, backup/revert checks, and install notes. It is not a from-scratch replacement, and it does not hide where it came from.
@@ -105,7 +115,7 @@ node scripts/install-offline.mjs --verify --profile desktop --dsh-home "$HOME/.d
 Or install directly from a zip:
 
 ```sh
-node scripts/install-offline.mjs --zip dsh-purge-1.2.0.zip --profile desktop --dsh-home "$HOME/.dsh"
+node scripts/install-offline.mjs --zip dsh-purge-1.2.1.zip --profile desktop --dsh-home "$HOME/.dsh"
 ```
 
 The installer validates the package, copies it to `$DSH_HOME/plugins/dsh-purge`, updates the profile `package.json`, links `node_modules/dsh-purge`, and writes `desktop-install.txt`. It does **not** run pnpm, Apply, or restart DSH.

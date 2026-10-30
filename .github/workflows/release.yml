@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   release:
-    if: github.repository == 'dongliuwuzhong-arch/dsh-purge-021rc2'
+    if: github.repository == 'dongliuwuzhong-arch/DSH-purge'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -76,4 +76,4 @@ jobs:
           fi
           test -s "$zip"
           gh release upload "$tag" "$zip" --clobber
-          echo "published https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2/releases/tag/${tag}"
+          echo "published https://github.com/dongliuwuzhong-arch/DSH-purge/releases/tag/${tag}"
