@@ -74,5 +74,5 @@ node scripts/check-bak-judge.mjs
 ## 上游与许可
 
 - 上游：[YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge)
-- 本仓库：[dongliuwuzhong-arch/dsh-purge-021rc2](https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2)
+- 本仓库：[dongliuwuzhong-arch/DSH-purge](https://github.com/dongliuwuzhong-arch/DSH-purge)
 - 许可证：MIT；上游作者与贡献者的版权归其各自所有

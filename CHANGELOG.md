@@ -3,6 +3,89 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 / rc.3 兼容变体**。
 上游以 MIT 发布，仍在维护（发版到 1.1.81，`dshTarget: 0.2.0-rc.2`）；本分支跟的是 0.2.1-rc.3。
 
+## 1.2.1 · 2026-10-31 · 密封 asar 的真正修法：升级不再静默失效
+
+补丁表 **82 条**（本版未增删补丁）。仓库从 `dsh-purge-021rc2` 改名为 **`DSH-purge`**。
+
+这一版只解决一件事：**「界面一切正常，但补丁全在空转」**。它是本插件历史上最难发现的故障，
+因为——它不报错。
+
+### 背景：补丁为什么一直没生效
+
+官方桌面版把宿主代码封在 `resources\app.asar` 里，而补丁只能写进解开的 `resources\app\`。
+Electron 的 `appSearchPaths` 默认序列是 `["app.asar", "app", "default_app.asar"]`
+（`shell/common/node_bindings.cc`，本机 v44.7.0 实测），**asar 排第一，只要它在就永远轮不到 app 目录**。
+
+插件设计的第 5 步本来就是「把 asar 改名挪走」，但 1.2.0 有两条路径走不到第 5 步：
+
+| 场景 | 1.2.0 行为 | 后果 |
+| --- | --- | --- |
+| 官方更新装完 | `autoApplyOnStart` 默认 `false`，启动逻辑直接 `return` | 标记 `reapply-asar.pending` 写了没人消费 |
+| 密封态点「应用」 | `settleMayReapply()` 在 `desktop + sealed` 时硬返回 `false` | 提示「等待应用」，但应用也过不去 |
+
+更糟的是 `official-update.wscript` 里有个恢复分支：`asar 不在 + bak 在` 就把 bak 复制回 asar。
+所以只改名不够，**bak 必须挪出 `resources\`**，否则下次更新亲手把自己顶回去。
+
+### 1）升级标记穿透 `autoApplyOnStart`（lib/index.js）
+
+`upgradeMarkerExists()` 为真时无视该开关，只放行「刚升级完」这一种情况；日常启动行为不变。
+
+### 2）`settleMayReapply` 增加 `upgraded` 例外（lib/settle-policy.js）
+
+```js
+export function settleMayReapply({ surface, sealed = false, upgraded = false } = {}) {
+  if (surface === "desktop" && sealed) return upgraded === true;
+  return true;
+}
+```
+
+原来的硬 `false` 是防「就地 extract/swap 和官方 Host 的 `Fiber._reload` 抢锁」。
+但升级刚完成那一刻 asar 是新文件、没有正在运行的 Fiber 持有它，不存在这个冲突。
+
+### 3）新增启动期自愈 `lib/sealed-heal.js`（新文件）
+
+升级标记只覆盖「这一次」。它还处理不了三种残留：换了 asar 但 bak 埋着、上次换包中途失败、
+用户手动重装同版本。新模块把它们收进一个纯函数判定：
+
+```js
+export function decideHealAction(s) {
+  if (!s.tree) return "broken-no-tree";
+  if (s.asar) {
+    if (!s.treeMarked) return "needs-apply-first";
+    return "needs-reapply";
+  }
+  if (s.bak) return "needs-unbury-bak";
+  if (!s.treeMarked) return "needs-apply-first";
+  return "healthy";
+}
+```
+
+五种状态、五种动作。`needs-apply-first` 是刻意保守：**补丁树还没补丁时绝不换包**，
+否则等于把宿主指向一份空目录，比现状更糟。
+
+`unburyBak()` 把 `app.asar.bak` 挪进 `~/.dsh/dsh-purge/asar-archive/`（带时间戳），
+不删除——那是用户唯一的本地回退。选这个目录是因为 NSIS 升级会清整棵安装目录，放里面等于没备份。
+
+新增配置 `autoHealSealedAsarOnStart`，默认 `true`。
+
+### 4）修掉「清洗失败却报告重启成功」（lib/index.js + lib/core.js）
+
+`scheduleApplyRestart()` 的密封分支绕过了 `clean` 闸：`restartSealedDesktopIfNeeded()` 只要能定位
+exe/asar 就无条件返回 `asarSwap: true`，于是清洗根本没写进宿主时，面板照样显示「正在重启」。
+现在先过 `unpackedHostIsClean()` 再决定，和未密封分支的判定保持一致。
+
+### 5）测试
+
+新增 `test/sealed-heal.test.mjs`（18 个用例：五种判定分支、路径推导、标记计数、bak 归档、
+重复归档不覆盖、EXDEV 跨盘兜底、非 EXDEV 错误不吞）与 `test/clean-gate.test.mjs`
+（9 个用例：clean 闸不拦换包、报错不报成功）。全套 **83 个测试通过**，0 失败。
+
+### 6）文档
+
+新增 `docs/SEALED-ASAR.md`（277 行）：从现象、Electron 加载顺序、官方更新为什么会顶回去，
+到 1.2.1 的四项改动、配置项关系、回退步骤，以及给排障者的三条实测判据。
+
+---
 ## 1.2.0 · 2026-10-30 · 第一次正式版号：判据、升级自愈、标记搬家，一天里三件事走完真机
 
 补丁表 **82 条**（本版未增删补丁）。

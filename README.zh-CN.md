@@ -1,10 +1,19 @@
 # dsh-purge
 
-**DSH 0.2.1-rc.2 / rc.3 / rc.5 兼容变体 · 1.2.0**
+**DSH 0.2.1-rc.2 / rc.3 / rc.5 兼容变体 · 1.2.1**
 
 - 上游：[YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge)
-- 本仓库：[dongliuwuzhong-arch/dsh-purge-021rc2](https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2)
+- 本仓库：[dongliuwuzhong-arch/DSH-purge](https://github.com/dongliuwuzhong-arch/DSH-purge)
 
+> 🔴 **先读这一条：补丁生效需要一个前提。**
+>
+> 官方桌面版把宿主代码封在 `resources\app.asar` 里，而补丁只能写进解开的 `resources\app\`。
+> Electron 的加载顺序是 `app.asar` → `app` → `default_app.asar`，**asar 在就永远轮不到目录**。
+>
+> 所以「补丁写上了」不等于「补丁生效了」。判断方法只有一条：看状态面板里有没有
+> `✗ app.asar: 还在` 这一行——有这行就是全在空转。
+>
+> 1.2.1 起，升级后的自愈是自动的；完整机制见 [`docs/SEALED-ASAR.md`](docs/SEALED-ASAR.md)。
 `dsh-purge` 是装在本机 DeepSeek Harness 上的提示词与宿主补丁插件。它在会话标题旁提供一个「清洗」侧栏，用来管理提示词、规则集、Skill 和宿主补丁；你确认后，它才会把改动写进当前 profile 和当前宿主。
 
 本仓库是上游 `dsh-purge` 的兼容分支，跟的是 DSH **0.2.1-rc.2 / rc.3 / rc.5**。它保留上游的补丁体系与注入流程，主要维护宿主版本适配、桌面端路径处理、备份/回滚判据和安装文档。它不是从零重写的另一个插件，也不隐藏上游来源。
@@ -105,7 +114,7 @@ node scripts/install-offline.mjs --verify --profile desktop --dsh-home "$HOME/.d
 也可以直接安装压缩包：
 
 ```sh
-node scripts/install-offline.mjs --zip dsh-purge-1.2.0.zip --profile desktop --dsh-home "$HOME/.dsh"
+node scripts/install-offline.mjs --zip dsh-purge-1.2.1.zip --profile desktop --dsh-home "$HOME/.dsh"
 ```
 
 安装器会校验包、复制到 `$DSH_HOME/plugins/dsh-purge`、修改 profile 的 `package.json`、建立 `node_modules/dsh-purge` 链接，并写入 `desktop-install.txt`。默认**不执行 pnpm、不 Apply、不重启**。
