@@ -1,13 +1,13 @@
 # dsh-purge
 
-**DSH 0.2.1-rc.3 compatibility fork · 1.1.97-dsh**
+**DSH 0.2.1-rc.2 / rc.3 / rc.5 compatibility fork · 1.2.0**
 
 - Upstream: [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge)
 - This fork: [dongliuwuzhong-arch/dsh-purge-021rc2](https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2)
 
 `dsh-purge` is a prompt and host-patch plugin for a local DeepSeek Harness install. It adds a **Clean** dock beside the session title for managing prompts, rule sets, skills, and host patches. Nothing is written to the host until you explicitly apply it.
 
-This repository is a compatibility fork of the upstream project, tracking DSH **0.2.1-rc.2 / rc.3**. It keeps the upstream patch system and injection flow, and maintains the host-version mappings, desktop path handling, backup/revert checks, and install notes. It is not a from-scratch replacement, and it does not hide where it came from.
+This repository is a compatibility fork of the upstream project, tracking DSH **0.2.1-rc.2 / rc.3 / rc.5**. It keeps the upstream patch system and injection flow, and maintains the host-version mappings, desktop path handling, backup/revert checks, and install notes. It is not a from-scratch replacement, and it does not hide where it came from.
 
 ## What it actually includes
 
@@ -62,7 +62,7 @@ Model tools: `purge_status`, `purge_apply`, `purge_revert`.
 
 ## Compatibility
 
-- Official desktop: DeepSeek Harness **0.2.1-rc.2 / 0.2.1-rc.3**
+- Official desktop: DeepSeek Harness **0.2.1-rc.2 / 0.2.1-rc.3 / 0.2.1-rc.5**
 - Official Web: the 0.2 line of `dsh web`
 - Node.js **>= 18**; **Node >= 22** is recommended on Windows to avoid console flashes
 - Web and desktop are installed and applied separately, each with its own profile and `$DSH_HOME`
@@ -105,7 +105,7 @@ node scripts/install-offline.mjs --verify --profile desktop --dsh-home "$HOME/.d
 Or install directly from a zip:
 
 ```sh
-node scripts/install-offline.mjs --zip dsh-purge-1.1.97-dsh.zip --profile desktop --dsh-home "$HOME/.dsh"
+node scripts/install-offline.mjs --zip dsh-purge-1.2.0.zip --profile desktop --dsh-home "$HOME/.dsh"
 ```
 
 The installer validates the package, copies it to `$DSH_HOME/plugins/dsh-purge`, updates the profile `package.json`, links `node_modules/dsh-purge`, and writes `desktop-install.txt`. It does **not** run pnpm, Apply, or restart DSH.
@@ -168,7 +168,7 @@ Compare numbers only within one surface. When an optional package is not install
 ## Upstream and license
 
 - Upstream project: [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge)
-- This branch starts from upstream **1.1.71** and tracks compatibility with DSH 0.2.1-rc.2 / rc.3
+- This branch starts from upstream **1.1.71** and tracks compatibility with DSH 0.2.1-rc.2 / rc.3 / rc.5
 - License: MIT, see [LICENSE](LICENSE)
 - Copyright for upstream work remains with its authors and contributors; this repository is responsible only for the compatibility changes
 

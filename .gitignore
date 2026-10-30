@@ -33,3 +33,5 @@ _archive/
 *.bak-*
 *.bak-原版
 .commitmsg.tmp
+*.tmp
+.commitmsg.tmp

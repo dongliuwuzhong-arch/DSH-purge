@@ -3,6 +3,54 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 / rc.3 兼容变体**。
 上游以 MIT 发布，仍在维护（发版到 1.1.81，`dshTarget: 0.2.0-rc.2`）；本分支跟的是 0.2.1-rc.3。
 
+## 1.2.0 · 2026-10-30 · 第一次正式版号：判据、升级自愈、标记搬家，一天里三件事走完真机
+
+补丁表 **82 条**（本版未增删补丁）。
+
+这一版把 1.1.98 / 1.1.99 / 1.1.100 三次同日迭代收成一个对外版号。三条都是被真机打出来的，不是读代码想出来的。
+
+### 1）判据不再自欺（1.1.98）
+
+`filePatchOutcome()` 原来先问 markers，命中就 applied，**不再看插入块在不在**。#26 的 `markersAny`
+只要"persona 行被我改过"就算过，于是 `agent-instructions` 那块从来没插进去，面板绿了很久。
+现在：结算了但还留着一条**非幂等** replacement 能改 → 如实报 `pending`；幂等残留（`replace` 里包着
+`pattern`）与 `skipIfMarked` 的补丁不在此列。函数导出为 `patchFileOutcome`，可单测。
+
+同版顺手修掉 `isDesktopSurface()` 混用显式入参与本进程环境——纯 node 语义的判定在 Electron 里永远
+变成 desktop，两条 surface 测试因此长期是红的（**这次是修代码，不是改断言**）。
+
+### 2）升级不再打回原型（1.1.99）
+
+官方升级重打完，桌面壳上 `settleMayRestart()` 恒为 `false`，于是补丁写在新解包的
+`resources\app` 里、宿主却还在读新的 `app.asar` —— 等于白打。现在重打成功后若 asar 仍密封，
+延迟 3 秒走外部 PowerShell 换包（`shouldSwapAfterUpgrade` + 配置 `autoSwapAfterUpgrade`，默认 true）。
+
+### 3）升级标记搬出安装目录（1.1.100）
+
+2026-10-30 真跑了一次官方升级（rc.3 → rc.5）。**升级本身成功，但 NSIS 升级清掉了整棵安装目录**：
+连同放在里面的救援脚本、解包目录、备份、以及刚写下的升级标记全没了。接着 `resources\runtime`
+被清空，rc.5 的 office 技能在挂载阶段 `readFileSync` 硬崩，连开三次 6 秒崩死。
+
+- 标记改到 `~/.dsh/dsh-purge/reapply-asar.pending`（`DSH_HOME` 优先），旧位置保留兼容读取与清理；
+- `official-update.wscript` 在脚本内部用 `%USERPROFILE%` 算标记路径，不再依赖宿主填占位符
+  （宿主那份 `main.js` 自己也是补丁产物，占位符多一处就整条链断）。
+
+### 4）文档对齐
+
+README / README.zh-CN / COMPAT 全部改到 rc.2 / rc.3 / rc.5，`dshTarget` 跟到 `0.2.1-rc.5`，
+离线安装示例里的包名改成 `dsh-purge-1.2.0.zip`。
+
+### 验证
+
+- **全量测试 56 / 56 pass**；`assert-patches` `patches=82 unique_ids=ok changelog=82`。
+- 真机：rc.5 上重解包 18,289 个文件、82 条重打至 **applied 71 / na 6 / skipped 5 / pending 0**，
+  宿主读 `resources\app`，插件 1.2.0 自报正常。
+- 演练：克隆安装目录 → 删空 `resources\runtime` → 一键补回 6,150 个文件 / 7 个 office 技能，通过。
+
+### 尚未验证
+
+- 升级自愈链（1.1.99 那段）仍**没在真升级里跑过**：这次升级发生在它上线之前，之后没再升过。
+
 ## 1.1.100-dsh · 2026-10-30 · 升级标记搬出安装目录（真升级实测换来的）
 
 ### 现场
