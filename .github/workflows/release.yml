@@ -44,36 +44,54 @@ jobs:
         # 破甲不许改灵魂：注入正文与破甲补丁一旦变化，这道门就红。
         run: node scripts/assert-soul-guard.mjs
 
-      - name: Publish GitHub Release
+      # Publish 拆成三段具名步骤：以前是一整块 run，失败时 annotation 只指向
+      # 「.github 第 N 行 exit 1」，看不出红在哪一步。拆开后失败会精确落在步骤名上。
+      - name: Publish / resolve version
+        id: ver
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          first="$(head -n 1 release-notes.md | tr -d '\r')"
+          echo "version=$version"
+          echo "first=$first"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "$first" != "# ${version}" ]; then
+            echo "::error::release-notes.md 第一行必须是 # ${version}，现在是: ${first}"
+            exit 1
+          fi
+
+      - name: Publish / build zip
+        run: |
+          set -euo pipefail
+          version="${{ steps.ver.outputs.version }}"
+          zip="dsh-purge-${version}.zip"
+          tag="v${version}"
+          if git rev-parse -q --verify "refs/tags/${tag}^{}" >/dev/null 2>&1; then
+            commit="$(git rev-parse "refs/tags/${tag}^{}")"
+            git archive --format=zip --prefix="dsh-purge-${version}/" --output="$zip" "$commit"
+          else
+            git archive --format=zip --prefix="dsh-purge-${version}/" --output="$zip" HEAD
+          fi
+          test -s "$zip"
+          echo "zip=$(pwd)/$zip  bytes=$(wc -c < "$zip")"
+
+      - name: Publish / create or update release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          version="$(node -p "require('./package.json').version")"
+          version="${{ steps.ver.outputs.version }}"
           tag="v${version}"
-          # 同一版本号再推 main 时不能整个跳过：以前这里直接 exit 0，
-          # 结果是代码推到 main、tag 也移动了，Release 里挂的 zip 还是旧包。
-          # 现在只跳过「创建」，资产一律重传（--clobber）。
-          exists=0
-          if gh release view "$tag" >/dev/null 2>&1; then exists=1; fi
-          first="$(head -n 1 release-notes.md | tr -d '\r')"
-          if [ "$first" != "# ${version}" ]; then
-            echo "release-notes.md 第一行必须是 # ${version}，现在是: ${first}"
-            exit 1
-          fi
           zip="dsh-purge-${version}.zip"
-          if git rev-parse -q --verify "refs/tags/${tag}^{}" >/dev/null; then
-            commit="$(git rev-parse "refs/tags/${tag}^{}")"
-            git archive --format=zip --prefix="dsh-purge-${version}/" --output="$zip" "$commit"
-            if [ "$exists" = "0" ]; then gh release create "$tag" --title "$tag" --notes-file release-notes.md; fi
+          # 同一版本号再推 main 时不能整个跳过：只跳过「创建」，资产一律重传。
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "release $tag already exists; uploading asset only"
           else
-            git archive --format=zip --prefix="dsh-purge-${version}/" --output="$zip" HEAD
             args=(release create "$tag" --target "$GITHUB_SHA" --title "$tag" --notes-file release-notes.md)
             case "$version" in
               *beta*|*alpha*|*rc*) args+=(--prerelease) ;;
             esac
-            if [ "$exists" = "0" ]; then gh "${args[@]}"; fi
+            gh "${args[@]}"
           fi
-          test -s "$zip"
           gh release upload "$tag" "$zip" --clobber
           echo "published https://github.com/dongliuwuzhong-arch/DSH-purge/releases/tag/${tag}"
