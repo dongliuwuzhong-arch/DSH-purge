@@ -135,7 +135,14 @@ jobs:
           }
 
           if gh release view "$tag" >/dev/null 2>&1; then
-            echo "release $tag already exists; uploading asset only"
+            # 已存在也要 edit：1.2.1 首次创建时 --title / --notes-file 没生效，
+            # 结果 release 正文是 tag 指向 commit 的 message、而且一个资产都没有。
+            # 只跳过 create，不跳过修正。
+            echo "release $tag exists; editing title/notes"
+            if ! out=$(gh release edit "$tag" --title "$tag" --notes-file release-notes.md 2>&1); then
+              report_fail "gh release edit 失败" "$out"
+            fi
+            echo "$out"
           else
             args=(release create "$tag" --target "$GITHUB_SHA" --title "$tag" --notes-file release-notes.md)
             case "$version" in
