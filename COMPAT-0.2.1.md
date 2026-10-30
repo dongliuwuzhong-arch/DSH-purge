@@ -1,6 +1,6 @@
 # 0.2.1 兼容说明
 
-本仓库基于上游 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) **1.1.71** 分叉，目标是让插件在 DeepSeek Harness **0.2.1-rc.2 / 0.2.1-rc.3** 上正常启动、注入、应用和回滚。上游机制与提示词仍是原作者成果；本分支主要维护宿主版本适配和兼容性判据。
+本仓库基于上游 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) **1.1.71** 分叉，目标是让插件在 DeepSeek Harness **0.2.1-rc.2 / rc.3 / rc.5** 上正常启动、注入、应用和回滚。上游机制与提示词仍是原作者成果；本分支主要维护宿主版本适配和兼容性判据。
 
 ## 已处理的问题
 

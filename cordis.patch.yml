@@ -1,4 +1,4 @@
-# dsh-purge bundle patch（0.2.1-rc.3 兼容分支）
+# dsh-purge bundle patch（0.2.1-rc.2 / rc.3 / rc.5 兼容分支）
 #
 # 提示词注入与宿主补丁由本插件提供；旧版兼容禁用项保留在下方。
 # 只安装 dsh-purge 本身，不 link 其它包。

@@ -1,13 +1,13 @@
 # dsh-purge
 
-**DSH 0.2.1-rc.3 兼容变体 · 1.1.97-dsh**
+**DSH 0.2.1-rc.2 / rc.3 / rc.5 兼容变体 · 1.2.0**
 
 - 上游：[YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge)
 - 本仓库：[dongliuwuzhong-arch/dsh-purge-021rc2](https://github.com/dongliuwuzhong-arch/dsh-purge-021rc2)
 
 `dsh-purge` 是装在本机 DeepSeek Harness 上的提示词与宿主补丁插件。它在会话标题旁提供一个「清洗」侧栏，用来管理提示词、规则集、Skill 和宿主补丁；你确认后，它才会把改动写进当前 profile 和当前宿主。
 
-本仓库是上游 `dsh-purge` 的兼容分支，跟的是 DSH **0.2.1-rc.2 / rc.3**。它保留上游的补丁体系与注入流程，主要维护宿主版本适配、桌面端路径处理、备份/回滚判据和安装文档。它不是从零重写的另一个插件，也不隐藏上游来源。
+本仓库是上游 `dsh-purge` 的兼容分支，跟的是 DSH **0.2.1-rc.2 / rc.3 / rc.5**。它保留上游的补丁体系与注入流程，主要维护宿主版本适配、桌面端路径处理、备份/回滚判据和安装文档。它不是从零重写的另一个插件，也不隐藏上游来源。
 
 ## 它实际有什么
 
@@ -62,7 +62,7 @@ dsh-purge --sync
 
 ## 兼容范围
 
-- 官方桌面端：DeepSeek Harness **0.2.1-rc.2 / 0.2.1-rc.3**
+- 官方桌面端：DeepSeek Harness **0.2.1-rc.2 / 0.2.1-rc.3 / 0.2.1-rc.5**
 - 官方 Web：`dsh web` 的 0.2 系
 - Node.js **>= 18**；Windows 下想避免闪窗，建议 **Node >= 22**
 - Web 和桌面端分开安装、分开应用，各用各的 profile 和 `$DSH_HOME`
@@ -105,7 +105,7 @@ node scripts/install-offline.mjs --verify --profile desktop --dsh-home "$HOME/.d
 也可以直接安装压缩包：
 
 ```sh
-node scripts/install-offline.mjs --zip dsh-purge-1.1.97-dsh.zip --profile desktop --dsh-home "$HOME/.dsh"
+node scripts/install-offline.mjs --zip dsh-purge-1.2.0.zip --profile desktop --dsh-home "$HOME/.dsh"
 ```
 
 安装器会校验包、复制到 `$DSH_HOME/plugins/dsh-purge`、修改 profile 的 `package.json`、建立 `node_modules/dsh-purge` 链接，并写入 `desktop-install.txt`。默认**不执行 pnpm、不 Apply、不重启**。
@@ -168,7 +168,7 @@ New-Item -ItemType Junction -Path "$env:USERPROFILE\.dsh\profiles\desktop\node_m
 ## 上游与许可
 
 - 上游项目：[YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge)
-- 本分支基于上游 **1.1.71** 分叉，跟随 DSH 0.2.1-rc.2 / rc.3 维护兼容补丁
+- 本分支基于上游 **1.1.71** 分叉，跟随 DSH 0.2.1-rc.2 / rc.3 / rc.5 维护兼容补丁
 - 许可证：MIT，见 [LICENSE](LICENSE)
 - 上游作者与贡献者的版权归其各自所有；本仓库只对兼容分支的修改负责
 

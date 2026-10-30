@@ -1,3 +1,33 @@
+# 1.2.0
+
+目标宿主：DeepSeek Harness **0.2.1-rc.2 / rc.3 / rc.5**（桌面 / Web）
+
+补丁表：**82 条定义**（本版未增删补丁）
+
+## 本版变更
+
+- 判据：markers 命中不再等于 applied，还留一条非幂等 replacement 就如实报 pending。
+- 网关：只有落在宿主 app 目录里的 pending 才挡重启，且报错点名是哪一条。
+- 面判定：入参给了身份字段就按隔离判定算，不再拿本进程 resourcesPath/argv 顶包。
+- 升级自愈：重打成功后若 asar 仍密封，自动走外部 PowerShell 换包。
+- 升级标记搬到 `~/.dsh/dsh-purge/`：安装目录会被 NSIS 升级整棵清空，写在那儿等于没写。
+- 文档对齐 rc.5；离线安装示例包名改 `dsh-purge-1.2.0.zip`。
+
+## 验证
+
+```sh
+node scripts/assert-patches.mjs   # patches=82 unique_ids=ok changelog=82
+node --test test/*.test.mjs       # 56 / 56 pass
+```
+
+真机（rc.5）：重解包 18,289 个文件、82 条重打至 applied 71 / na 6 / skipped 5 / pending 0。
+
+## 尚未验证
+
+- 升级自愈链没在真升级里跑过（这次升级发生在它上线之前）。
+
+---
+
 # 1.1.100-dsh
 
 目标宿主：DeepSeek Harness **0.2.1-rc.2 / rc.3 / rc.5**（桌面 / Web）
