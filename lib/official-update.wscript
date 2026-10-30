@@ -82,10 +82,14 @@ if (!ok) {
 } else {
   if (!movedApp && fso.FolderExists(appDir)) log('move-app-failed');
   try {
-    var marker = fso.CreateTextFile(resources + '\\dsh-purge-reapply-asar', true);
+    // [1.1.100] 标记写在 ~/.dsh/dsh-purge/：安装目录会被整棵清空，写在那儿等于没写。
+    var home = sh.ExpandEnvironmentStrings('%USERPROFILE%');
+    var markerDir = home + '\\.dsh\\dsh-purge';
+    try { if (!fso.FolderExists(markerDir)) fso.CreateFolder(markerDir); } catch (mkErr) { log('marker-dir ' + mkErr); }
+    var marker = fso.CreateTextFile(markerDir + '\\reapply-asar.pending', true);
     marker.WriteLine('1');
     marker.Close();
-    log('marker');
+    log('marker ' + markerDir);
   } catch (markerErr) { log('marker ' + markerErr); }
   try { sh.Environment('PROCESS').Remove('ELECTRON_RUN_AS_NODE'); } catch (ignore2) {}
   sh.Run('"' + exe + '"', 1, false);

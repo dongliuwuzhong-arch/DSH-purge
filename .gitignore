@@ -32,3 +32,4 @@ _archive/
 # 本机备份
 *.bak-*
 *.bak-原版
+.commitmsg.tmp

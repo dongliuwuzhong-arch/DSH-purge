@@ -1,3 +1,29 @@
+# 1.1.100-dsh
+
+目标宿主：DeepSeek Harness **0.2.1-rc.2 / rc.3 / rc.5**（桌面 / Web）
+
+补丁表：**82 条定义**（本版未增删补丁）
+
+## 本版变更
+
+- 升级标记从 `resources\` 搬到 `~/.dsh/dsh-purge/`：安装目录会被 NSIS 升级整棵清空，写在那儿等于没写。
+- wscript 自己在脚本里算标记路径，不再依赖宿主填占位符。
+- 保留对旧位置标记的读取与清理。
+- 新增 4 条回归测试。
+
+## 验证
+
+```sh
+node scripts/assert-patches.mjs   # patches=82
+node --test test/*.test.mjs       # 56 / 56 pass
+```
+
+## 尚未验证
+
+- 新标记位置要等下一次真升级才实战走一遍。
+
+---
+
 # 1.1.99-dsh
 
 目标宿主：DeepSeek Harness **0.2.1-rc.2 / 0.2.1-rc.3**（桌面 / Web）
