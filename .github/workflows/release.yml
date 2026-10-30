@@ -79,11 +79,30 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -euo pipefail
+          # set -e 关掉：gh 失败时要先抓 stderr 报出来，不能被 set -e 直接吞掉。
+          set -uo pipefail
           version="${{ steps.ver.outputs.version }}"
           tag="v${version}"
           zip="dsh-purge-${version}.zip"
-          # 同一版本号再推 main 时不能整个跳过：只跳过「创建」，资产一律重传。
+
+          # 诊断：这三行会在失败时给出「到底是权限不够还是命令用错」。
+          # 1.2.1 之前的版本只报 exit 1，看不出原因。
+          echo "repo=${{ github.repository }}"
+          echo "token_len=${#GH_TOKEN}"
+          gh auth status 2>&1 | sed 's/^/  auth: /' || true
+
+          report_fail() {
+            echo "::error::$1"
+            {
+              echo "### $1"
+              echo ''
+              echo '```'
+              echo "$2"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          }
+
           if gh release view "$tag" >/dev/null 2>&1; then
             echo "release $tag already exists; uploading asset only"
           else
@@ -91,7 +110,15 @@ jobs:
             case "$version" in
               *beta*|*alpha*|*rc*) args+=(--prerelease) ;;
             esac
-            gh "${args[@]}"
+            echo "running: gh ${args[*]}"
+            if ! out=$(gh "${args[@]}" 2>&1); then
+              report_fail "gh release create 失败" "$out"
+            fi
+            echo "$out"
           fi
-          gh release upload "$tag" "$zip" --clobber
-          echo "published https://github.com/dongliuwuzhong-arch/DSH-purge/releases/tag/${tag}"
+
+          if ! out=$(gh release upload "$tag" "$zip" --clobber 2>&1); then
+            report_fail "gh release upload 失败" "$out"
+          fi
+          echo "$out"
+          echo "published https://github.com/${{ github.repository }}/releases/tag/${tag}"
