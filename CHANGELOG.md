@@ -3,6 +3,41 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 / rc.3 兼容变体**。
 上游以 MIT 发布，仍在维护（发版到 1.1.81，`dshTarget: 0.2.0-rc.2`）；本分支跟的是 0.2.1-rc.3。
 
+## 1.1.100-dsh · 2026-10-30 · 升级标记搬出安装目录（真升级实测换来的）
+
+### 现场
+
+2026-10-30 12:05 真跑了一次官方升级（rc.3 → rc.5）。**升级本身成功了，但一场连带清空把现场抹了**：
+electron-builder 的 NSIS 升级会清整个安装目录——连放在 `C:\Software\DSH\_asar-swap\` 的脚本、
+`_rc5` 解包目录、416MB 的 `app.bak-*` 备份，全都没了（那些路径安装包清单里根本没有）。
+
+连带后果：
+- 写在 `resources\dsh-purge-reapply-asar` 的升级标记被同一次清空吞掉 → 下次启动看不到 → **自愈链等于没跑**；
+- `resources\runtime` 被清空 → rc.5 的 `dsh-skill-office` 在挂载阶段 `readFileSync` 直接抛
+  `DesktopHostFatalError`（该文件 105 行、`readFileSync` ×2、`existsSync` ×0，没有兜底），
+  启动 6 秒即崩，界面根本起不来；
+- 回滚用的 asar 备份跟着安装目录一起没了。
+
+### 改法
+
+- `lib/official-update.js`：标记从 `<install>\resources\dsh-purge-reapply-asar` 搬到
+  `~/.dsh/dsh-purge/reapply-asar.pending`（`DSH_HOME` 优先）。旧位置保留兼容读取与清理。
+- `lib/official-update.wscript`：标记路径在脚本内部用 `%USERPROFILE%` 自己算，
+  **不再依赖宿主填占位符**——宿主那份 `main.js` 自己也是被补丁改出来的，占位符多一处就整条链断。
+- 新增 `test/official-update.test.mjs` 4 条：标记不得落在安装目录、`DSH_HOME` 生效、
+  老标记仍认且能一起清、非官方 exe 不给路径。
+
+### 验证
+
+- **全量 56 / 56 pass**（1.1.99 是 52）。
+- `assert-patches`：补丁表 82 条不变。
+- 未验证：标记新位置要等**下一次真升级**才走一遍；这次已经把模板和读取端都改到同一处。
+
+### 教训
+
+**任何"下次启动还要用"的东西都不能放在安装目录里。** 备份、标记、日志、救援脚本都一样。
+升级器不认你的目录规划，它只认"这个目录整棵归我"。
+
 ## 1.1.99-dsh · 2026-10-30 · 升级不再打回原型：重打之后真换包
 
 ### 问题
