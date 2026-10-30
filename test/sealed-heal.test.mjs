@@ -54,12 +54,17 @@ test("bak 优先于树未标记：先保住退路再谈补丁", () => {
 // ---- locateInstall ----
 
 test("locateInstall 从 exe 推出四个关键路径", () => {
-  const loc = locateInstall("C:\\Software\\DSH\\DeepSeek Harness.exe");
-  assert.equal(loc.installDir, path.normalize("C:\\Software\\DSH"));
-  assert.equal(loc.resources, path.join("C:\\Software\\DSH", "resources"));
-  assert.equal(loc.asar, path.join("C:\\Software\\DSH", "resources", "app.asar"));
+  // 路径必须用 path.join 构造，不能硬编码反斜杠：
+  // Linux 上 path.dirname("C:\\Soft\\x.exe") 返回 "."（只认 /），
+  // 硬编码反斜杠的断言在 CI 上必红、在 Windows 上却恒绿。
+  // 这条就是 1.2.1 第一次跑 CI 挂掉的原因。
+  const base = path.join("C:", "Software", "DSH");
+  const loc = locateInstall(path.join(base, "DeepSeek Harness.exe"));
+  assert.equal(loc.installDir, base);
+  assert.equal(loc.resources, path.join(base, "resources"));
+  assert.equal(loc.asar, path.join(base, "resources", "app.asar"));
   assert.equal(loc.bak, loc.asar + ".bak");
-  assert.equal(loc.tree, path.join("C:\\Software\\DSH", "resources", "app"));
+  assert.equal(loc.tree, path.join(base, "resources", "app"));
 });
 
 test("locateInstall(null) 返回 null", () => {
@@ -87,7 +92,7 @@ test("countPatchMarks 数得准，读不到返回 -1", () => {
 });
 
 test("probeInstall 对不存在的路径全部报 false，不会误判成可换包", () => {
-  const loc = locateInstall("C:\\__nonexistent__\\DeepSeek Harness.exe");
+  const loc = locateInstall(path.join("C:", "__nonexistent__", "DeepSeek Harness.exe"));
   const s = probeInstall(loc);
   assert.equal(s.asar, false);
   assert.equal(s.tree, false);
