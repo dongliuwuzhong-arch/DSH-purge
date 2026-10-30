@@ -20,29 +20,60 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # actions/checkout@v4 默认不拉 tag。不拉的话下面
+          # `git rev-parse refs/tags/vX.Y.Z` 永远为假，永远走 --target 那条路。
+          fetch-tags: true
 
       - name: Syntax-check plugin entry
         # 逐个文件列名字会漏：新加的 lib/*.js 不写进来就等于没检查。
         # 改成扫全量，保证 lib/ 与 bin/ 下每个文件都被 --check 过。
         run: |
+          # 每步都往 STEP_SUMMARY 写一行：失败时在 Summary 页就能看到跑到哪了，
+          # 不用点进 job 展开日志（1.2.1 排查 CI 时就是卡在这一步看不见）。
+          mark() { echo "- [x] $1" >> "$GITHUB_STEP_SUMMARY"; }
+          fail() { echo "- [ ] **$1**" >> "$GITHUB_STEP_SUMMARY"; echo "::error::$1"; exit 1; }
+          echo '## 门禁进度' >> "$GITHUB_STEP_SUMMARY"
           set -e
           n=0
           for f in lib/*.js lib/*.mjs bin/*.js client.js; do
-            node --check "$f"
+            node --check "$f" || fail "node --check 失败: $f"
             n=$((n+1))
           done
-          echo "syntax-checked $n files"
-          node --check scripts/assert-patches.mjs
-          node --check scripts/assert-soul-guard.mjs
-          node --input-type=module -e "import './lib/index.js'"
-          node scripts/assert-patches.mjs
+          mark "语法检查 $n 个文件"
+          node --check scripts/assert-patches.mjs || fail "node --check assert-patches.mjs"
+          node --check scripts/assert-soul-guard.mjs || fail "node --check assert-soul-guard.mjs"
+          node --input-type=module -e "import './lib/index.js'" || fail "import lib/index.js 失败"
+          mark "import lib/index.js"
+          node scripts/assert-patches.mjs || fail "补丁表自检失败"
+          mark "补丁表自检"
 
       - name: Unit tests
-        run: node --test "test/**/*.test.mjs"
+        run: |
+          if ! node --test "test/**/*.test.mjs" > gate.log 2>&1; then
+            echo '- [ ] **单元测试失败**' >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            tail -40 gate.log >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            cat gate.log
+            echo '::error::单元测试失败'
+            exit 1
+          fi
+          tail -6 gate.log
+          echo '- [x] 单元测试' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Soul guard
         # 破甲不许改灵魂：注入正文与破甲补丁一旦变化，这道门就红。
-        run: node scripts/assert-soul-guard.mjs
+        run: |
+          if ! out=$(node scripts/assert-soul-guard.mjs 2>&1); then
+            echo '- [ ] **Soul guard 失败**' >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "$out" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::Soul guard 失败: $out"
+            exit 1
+          fi
+          echo "$out"
+          echo "- [x] Soul guard" >> "$GITHUB_STEP_SUMMARY"
 
       # Publish 拆成三段具名步骤：以前是一整块 run，失败时 annotation 只指向
       # 「.github 第 N 行 exit 1」，看不出红在哪一步。拆开后失败会精确落在步骤名上。
