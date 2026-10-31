@@ -1,142 +1,96 @@
-# 1.2.1
+# 1.2.2
 
 目标宿主：DeepSeek Harness **0.2.1-rc.2 / rc.3 / rc.5**（桌面 / Web）
 
-补丁表：**82 条定义**（本版未增删补丁）
+补丁表：83 条定义（1.2.1 的 82 条 + 新增 #90）
 
-仓库从 `dsh-purge-021rc2` 改名成 **`DSH-purge`**。
+## 本版只解决一件事：空回合
 
-## 本版只解决一件事：补丁静默失效
+模型把答案写进了思考通道，界面上什么都没有——**不重试、不报错、不留痕迹**。
+你只看到一条空气，然后不知道是自己网络的问题还是它傻了。
 
-官方桌面版把宿主代码封在 `resources\app.asar`，补丁只能写进解开的 `resources\app\`。
-Electron 的加载顺序是 `app.asar` → `app` → `default_app.asar`，**asar 在就永远轮不到目录**。
+### 这不是破甲搞坏的
 
-所以「面板显示 applied」不等于「补丁进进程」。这个故障最难发现的地方是**它不报错**。
+从 `backup/plugins-20261030/app.asar.original`（破甲前的原版 asar）里抽出的
+`dsh-llm-pi-ai/lib/index.js`，125589 字节、md5 `8db95ccb…`，与磁盘那份逐字节一致。
+破甲原有 82 条补丁里命中 `llm-pi-ai` 的是 **0 条**。这个洞一直都在。
 
-### 修掉的四条路径
+### 判据错在哪
 
-- **升级标记穿透 `autoApplyOnStart`**：`autoApplyOnStart` 默认 false，1.2.0 的启动逻辑直接 return，
-  于是 `official-update.wscript` 装完写下的 `reapply-asar.pending` 永远没人消费。现在读到标记就放行。
-- **`settleMayReapply` 增加 `upgraded` 例外**：原来 `desktop + sealed` 硬返回 false，
-  导致密封态下点「应用」也过不去。升级刚完成那一刻 asar 是新文件、没有 Fiber 抢锁，可以放行。
-- **新增启动期自愈 `lib/sealed-heal.js`**：处理升级标记覆盖不到的三种残留
-  （bak 还埋在 resources、上次换包中途失败、手动重装同版本）。五种状态五种动作，
-  其中「补丁树还没补丁」时**绝不换包**——换了等于把宿主指向一份空目录，比现状更糟。
-- **修掉「清洗失败却报重启成功」**：`scheduleApplyRestart` 的密封分支原来绕过 clean 闸，
-  `restartSealedDesktopIfNeeded` 只要能定位 exe/asar 就无条件返回 `asarSwap: true`，
-  于是报错时面板照样显示「正在重启」。现在先过 clean 闸再决定。
+`dsh-llm-pi-ai/lib/index.js` 的 `mapStopReason()`：
 
-### 新增配置
+```js
+case "stop":
+    if (message.content.length === 0) return { /* EMPTY_RESPONSE */ };
+    return { kind: "stop" };
+```
 
-`autoHealSealedAsarOnStart`，默认 `true`。关闭后启动时不做密封状态自检。
+吞句那条消息的 `content` 是 `[{type:"thinking", ...}]`，长度是 **1**。
+长度不为 0，所以判成正常结束，不进重试队列。
 
-### 安全护栏
+全库统计：12800+ 次重试里 `EMPTY_RESPONSE` 只触发过 1 次 —— 漏掉的正是最常见的那种情形。
 
-换包会杀掉整个宿主进程树，所以：
-- 同一宿主进程内只允许排一次（`healSwapScheduled`），不会出现「重启两次、第一次刚起来就被第二次杀掉」
-- 非桌面壳不做换包
-- `autoSwapAfterUpgrade: false` 时不自愈
+### #90 EMPTY_TURN_AFTER_REASONING
+
+判据改成「没有正文、没有工具调用、但有思考」也走 EMPTY_RESPONSE，
+接上 `retry-policy.js` 里**本来就有**的重试（`EMPTY_RESPONSE_CODE` 在
+`DEFAULT_RETRYABLE_CODES` 里，`maxRetries: 5`、指数退避）。补丁不新造重试，只让这个洞能被认出来。
+
+八种输入实测：
+
+| 回合内容 | 结果 |
+| --- | --- |
+| 正常文字回复 | 正常结束 |
+| 只有思考（吞句） | **判 EMPTY_RESPONSE，会重试** |
+| 只有工具调用 | 正常结束 |
+| 思考 + 工具 | 正常结束 |
+| 完全空 | 判 EMPTY_RESPONSE（原本就是这样） |
+| 思考 + 空白正文 | 判 EMPTY_RESPONSE |
+| `reasoning` 别名 | 判 EMPTY_RESPONSE（扛上游改名） |
+| `tool-call` 别名 | 正常结束（扛上游改名） |
+
+**带工具调用的回合不会误伤**：全库 11409 条工具回合里有 6104 条正文为空，那是协议要求
+（工具回合本来就不说话），判据靠 `hasTool` 把它们排除掉。
+
+类型名容易看错：pi-ai 内部是 `thinking` / `toolCall`（驼峰），会话日志里看到的
+`reasoning` / `tool-call` 是 DSH 自己的序列化格式，两回事。两种都认是为了扛上游改名。
+
+### 新增 `llm-pi-ai` 目标别名
+
+`targetFiles()` 原来没有指向适配器的 key。磁盘上叫 `pi-ai` 的东西有两个，混了就打错文件：
+
+| 包 | 是什么 | 归谁管 |
+| --- | --- | --- |
+| `@deepseek-ai/dsh-llm-pi-ai` | DSH 适配层，`mapStopReason` 在这里 | **本版新增的 `llm-pi-ai`** |
+| `@earendil-works/pi-ai` | 它 import 的上游库 | 原有的 `pi-ai-completions` 等三个 key |
+
+### 两条标记都认
+
+`markersAny: true` + `["[dsh-purge-90]", "[dsh-fix 2026-11-01]"]`。
+
+这个补丁 2026-11-01 凌晨是**手工**写进宿主文件的，机器上那份带的是手打标记。
+只认新标记的话，第一次自动应用会在旧块上再叠一层，把 `case "stop": {` 套进第二个花括号里——
+**语法还成立，行为是错的**，而且不会当场炸，等下一次吞句才露头。
 
 ### 测试
 
-`test/sealed-heal.test.mjs` 18 个用例（五种判定分支、路径推导、标记计数、bak 归档、
-重复归档不覆盖、EXDEV 跨盘兜底、非 EXDEV 错误不吞）。
-另新增 `test/clean-gate.test.mjs` 9 个用例锁住「clean 闸不拦换包」与「报错不报成功」两条核心判定。
-全套 **83 个测试通过**。
+新增 `test/patch90.test.mjs` 14 个用例：把 `case` 块套进最小 `switch` 外壳当真正的
+`mapStopReason` 跑，八种输入逐条验。另有一条对照用例证明「官方原版确实会把只有思考的回合判成正常结束」——
+没有它，测试只能证明新代码能跑，证明不了它修的是真问题。
 
-### 文档
+全套 **97 个测试通过**（1.2.1 是 83 个）。
 
-新增 [`docs/SEALED-ASAR.md`](docs/SEALED-ASAR.md)（277 行）：从现象、Electron 加载顺序、
-官方更新为什么会把它顶回去，到 1.2.1 的四项改动、配置项关系、回退步骤，
-以及给排障者的三条实测判据。
+### 代价
 
-### SOUL-GUARD 基线更新
+每次吞句多花一次请求。按历史频率（全库 16 次吞 / 1495 条纯文本回合），平均每 90 个回合多一次重试。
+重试也救不回来的时候（模型连续 5 次都把答案写进思考通道），最后还是空——
+补丁不能治模型，只能兜底。
 
-`#26 MINIMAL_PERSONA_PURGE` 的指纹变了，但 `lib/patches.js` 在 1.2.1 里**一行未改**——
-这是 1.2.0 就带着的基线漂移。真机验证过新锚点确实生效
-（`minimal.patch.yml` 里 `id: agent-instructions` 从 0 处变成 1 处），所以更新基线而不是回退代码。
+### 还原
+
+删掉 `case "stop": { ... }` 整块，恢复成 `if (message.content.length === 0)` 那一行。
 
 ---
+
 ## 历史版本
 
-# 1.1.100-dsh
-
-目标宿主：DeepSeek Harness **0.2.1-rc.2 / rc.3 / rc.5**（桌面 / Web）
-
-补丁表：**82 条定义**（本版未增删补丁）
-
-## 本版变更
-
-- 升级标记从 `resources\` 搬到 `~/.dsh/dsh-purge/`：安装目录会被 NSIS 升级整棵清空，写在那儿等于没写。
-- wscript 自己在脚本里算标记路径，不再依赖宿主填占位符。
-- 保留对旧位置标记的读取与清理。
-- 新增 4 条回归测试。
-
-## 验证
-
-```sh
-node scripts/assert-patches.mjs   # patches=82
-node --test test/*.test.mjs       # 56 / 56 pass
-```
-
-## 尚未验证
-
-- 新标记位置要等下一次真升级才实战走一遍。
-
----
-
-# 1.1.99-dsh
-
-目标宿主：DeepSeek Harness **0.2.1-rc.2 / 0.2.1-rc.3**（桌面 / Web）
-
-补丁表：**82 条定义**（本版未增删补丁）
-
-## 本版变更
-
-- **升级不再打回原型**：官方升级重打完，若 asar 仍密封，自动用 PowerShell 换包并重开。
-- 新增配置 `autoSwapAfterUpgrade`（默认 true）；设 false 退回"只写盘不换包"。
-- 新增 `shouldSwapAfterUpgrade()` 与 5 条回归测试。
-
-## 验证
-
-```sh
-node scripts/assert-patches.mjs   # patches=82 unique_ids=ok changelog=82
-node --test test/*.test.mjs       # 52 / 52 pass
-```
-
-## 尚未验证
-
-- 真实官方升级没跑过（当前没有新版本），行为待下一次升级检验。
-
----
-
-# 1.1.98-dsh
-
-目标宿主：DeepSeek Harness **0.2.1-rc.2 / 0.2.1-rc.3**（桌面 / Web）
-
-补丁表：**82 条定义**（本版未增删补丁，只改判据与诊断）
-
-## 本版变更
-
-- 修 #26 假绿：markers 命中不再等于 applied，还留一条非幂等 replacement 就如实报 pending。
-- 修重启闸门：只有落在宿主 app 目录里的 pending 才挡重启，且报错点名是哪一条。
-- 修 surface 判定：入参给了身份字段就按隔离判定算，不再拿本进程的 resourcesPath/argv 去顶。
-- 新增 6 条回归测试。
-
-## 验证
-
-```sh
-node scripts/assert-patches.mjs      # patches=82 unique_ids=ok changelog=82
-node --test test/*.test.mjs          # 47 / 47 pass
-```
-
-## 尚未验证
-
-- 宿主外 pending 放宽阻断之后，面板还没有展示项（后续版本补）。
-- 桌面壳上重新 pack asar 的路径本版未触碰。
-
-## 上游
-
-- [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge)
-- 本分支基于上游 1.1.71 维护 0.2.1 兼容性
-- 许可证：MIT

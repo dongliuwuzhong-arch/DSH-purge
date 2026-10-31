@@ -35,11 +35,11 @@
 
 ## 补丁表
 
-当前补丁表为 **82 条定义**。实际应用时按宿主面匹配，分为已应用、待应用、跳过；可选包缺失时会显示 `missing_file`，不阻塞本次应用。
+当前补丁表为 **83 条定义**。实际应用时按宿主面匹配，分为已应用、待应用、跳过；可选包缺失时会显示 `missing_file`，不阻塞本次应用。
 
 ```sh
 node scripts/assert-patches.mjs
-# 期望：patches=82 unique_ids=ok changelog=82
+# 期望：patches=83 unique_ids=ok changelog=83
 ```
 
 面板和命令行的数字可能不同：桌面面板按桌面面统计，`dsh-purge --status` 默认按 Web 面统计。只在同一面内比较数字，重点看 pending 是否为 0。
