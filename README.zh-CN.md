@@ -1,6 +1,6 @@
 # dsh-purge
 
-**DSH 0.2.1-rc.2 / rc.3 / rc.5 兼容变体 · 1.2.1**
+**DSH 0.2.1-rc.2 / rc.3 / rc.5 兼容变体 · 1.2.2**
 
 - 上游：[YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge)
 - 本仓库：[dongliuwuzhong-arch/DSH-purge](https://github.com/dongliuwuzhong-arch/DSH-purge)
@@ -114,7 +114,7 @@ node scripts/install-offline.mjs --verify --profile desktop --dsh-home "$HOME/.d
 也可以直接安装压缩包：
 
 ```sh
-node scripts/install-offline.mjs --zip dsh-purge-1.2.1.zip --profile desktop --dsh-home "$HOME/.dsh"
+node scripts/install-offline.mjs --zip dsh-purge-1.2.2.zip --profile desktop --dsh-home "$HOME/.dsh"
 ```
 
 安装器会校验包、复制到 `$DSH_HOME/plugins/dsh-purge`、修改 profile 的 `package.json`、建立 `node_modules/dsh-purge` 链接，并写入 `desktop-install.txt`。默认**不执行 pnpm、不 Apply、不重启**。
