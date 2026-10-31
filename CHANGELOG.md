@@ -3,6 +3,97 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 / rc.3 兼容变体**。
 上游以 MIT 发布，仍在维护（发版到 1.1.81，`dshTarget: 0.2.0-rc.2`）；本分支跟的是 0.2.1-rc.3。
 
+## 1.2.2 · 2026-11-01 · 空回合不再是一条空气
+
+补丁表 83 条（1.2.1 的 82 条 + 新增 **#90**）。
+
+这一版只有一件事：**模型把答案写进了思考通道，界面上什么都没有，而且不重试、不报错。**
+
+### 这不是破甲搞坏的，是官方行为
+
+拿 `backup/plugins-20261030/app.asar.original`（破甲前的原版 asar）里抽出来的
+`dsh-llm-pi-ai/lib/index.js` 逐字节比过：原版 125589 字节、md5 `8db95ccb…`，和磁盘上那份完全一致。
+破甲原有 82 条补丁里，命中 `llm-pi-ai` 的是 **0 条**。所以这个洞一直在，只是以前没人把它归到判据上。
+
+### 判据错在哪
+
+`dsh-llm-pi-ai/lib/index.js` 的 `mapStopReason()`：
+
+```js
+case "stop":
+    if (message.content.length === 0) return { /* EMPTY_RESPONSE */ };
+    return { kind: "stop" };
+```
+
+吞句那条消息的 `content` 是 `[{type:"thinking", ...}]`，长度是 **1**，不是 0。
+于是被判成正常 `stop`，不进重试队列，界面上就是一条空气。
+
+全库统计：12800+ 次重试里 `EMPTY_RESPONSE` 只触发过 1 次 —— 判据漏掉的正是最常见的那种情形。
+
+### #90 EMPTY_TURN_AFTER_REASONING
+
+```js
+case "stop": {
+    const dshPurgeHasText = message.content.some((piece) => piece.type === "text" && typeof piece.text === "string" && piece.text.trim().length > 0);
+    const dshPurgeHasTool = message.content.some((piece) => piece.type === "toolCall" || piece.type === "tool-call");
+    const dshPurgeHasThinking = message.content.some((piece) => piece.type === "thinking" || piece.type === "reasoning");
+    if (message.content.length === 0 || (!dshPurgeHasText && !dshPurgeHasTool && dshPurgeHasThinking)) return { /* EMPTY_RESPONSE */ };
+    return { kind: "stop" };
+}
+```
+
+接上 `dsh-llm/lib/types/retry-policy.js` 里已有的策略：`EMPTY_RESPONSE_CODE` 本来就在
+`DEFAULT_RETRYABLE_CODES` 里，`maxRetries: 5`、指数退避。补丁不用新造重试，只要让这个洞能被认出来。
+
+**为什么不会误伤工具调用**：全库 11409 条工具回合里有 6104 条正文为空，那是协议要求
+（工具回合本来就不说话）。判据靠 `dshPurgeHasTool` 把它们排除，实测八种情形：
+
+| 回合内容 | 结果 |
+| --- | --- |
+| 正常文字回复 | 正常结束 |
+| 只有思考（吞句） | **判 EMPTY_RESPONSE，会重试** |
+| 只有工具调用 | 正常结束 |
+| 思考 + 工具 | 正常结束 |
+| 完全空 | 判 EMPTY_RESPONSE（原本就是这样） |
+| 思考 + 空白正文 | 判 EMPTY_RESPONSE |
+| `reasoning` 别名 | 判 EMPTY_RESPONSE（扛上游改名） |
+| `tool-call` 别名 | 正常结束（扛上游改名） |
+
+类型名要留意：pi-ai 内部用的是 **`thinking`** 和 **`toolCall`**（驼峰），
+不是会话日志里看到的 `reasoning` / `tool-call` —— 后者是 DSH 自己的序列化格式，两回事。
+补丁两种都认，是为了以后上游改名时不用再动一次。
+
+### 新增 `llm-pi-ai` 目标别名（lib/core.js）
+
+`targetFiles()` 原来没有指向适配器的 key。`pi-ai` 这个名字在磁盘上有**两个东西**，混了就打错文件：
+
+| 包 | 是什么 | 归谁管 |
+| --- | --- | --- |
+| `@deepseek-ai/dsh-llm-pi-ai` | DSH 的适配层，`mapStopReason` 在这里 | **本版新增的 `llm-pi-ai`** |
+| `@earendil-works/pi-ai` | 它 import 的上游库 | 原有的 `pi-ai-completions` 等三个 key |
+
+### 两条标记都认（避免二次叠加）
+
+`markersAny: true` + `["[dsh-purge-90]", "[dsh-fix 2026-11-01]"]`。
+
+2026-11-01 凌晨这个补丁是**手工**写进宿主文件的，装在这台机器上的那份带的是手打标记。
+只认新标记的话，第一次自动应用会在旧块上再叠一层 —— 把 `case "stop": {` 套进第二个花括号里，
+**语法还成立，行为是错的**。这种错不会当场炸，它会在下一次吞句时才露头。
+
+### 测试
+
+新增 `test/patch90.test.mjs` 14 个用例：把 `case` 块套进最小 `switch` 外壳当真正的
+`mapStopReason` 跑，八种输入逐条验，外加「官方原版确实会把只有思考的回合判成正常结束」这条对照
+（没有它，测试只证明新代码能跑，证明不了它修的是真问题）。
+
+全套 **97 个测试通过**（1.2.1 是 83 个）。
+
+### 升级提示
+
+宿主文件被 DSH 升级重写后，`autoHealSealedAsarOnStart` 会在下次启动时重打。
+手工还原的话：删掉 `case "stop": { ... }` 整块，恢复成 `if (message.content.length === 0)` 那一行。
+
+
 ## 1.2.1 · 2026-10-31 · 密封 asar 的真正修法：升级不再静默失效
 
 补丁表 **82 条**（本版未增删补丁）。仓库从 `dsh-purge-021rc2` 改名为 **`DSH-purge`**。
