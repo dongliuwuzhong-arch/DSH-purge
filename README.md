@@ -44,7 +44,7 @@ The **dsh-purge** button beside the session title opens a right-hand dock. It cu
 
 ### Patches
 
-- The patch table currently defines **82 patches**. Actual status is matched against the current host surface and reported as applied, pending, or skipped.
+- The patch table currently defines **83 patches**. Actual status is matched against the current host surface and reported as applied, pending, or skipped.
 - Before the first apply, each target is backed up as `<file>.dshpurge.bak`; repeated applies are idempotent.
 - **Restore** copies backups back and removes them. If a backup is missing, at least the plugin's shim lines are stripped.
 - **Uninstall** restores applied patches first, then removes the inject file, rule library, and the plugin itself.
