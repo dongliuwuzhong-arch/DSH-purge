@@ -1,6 +1,6 @@
 # dsh-purge
 
-**DSH 0.2.1-rc.2 / rc.3 / rc.5 兼容变体 · 1.2.2**
+**DSH 0.2.1-rc.2 / rc.3 / rc.5 兼容变体 · 1.2.3**
 
 - 上游：[YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge)
 - 本仓库：[dongliuwuzhong-arch/DSH-purge](https://github.com/dongliuwuzhong-arch/DSH-purge)
@@ -43,7 +43,7 @@
 
 ### 补丁
 
-- 补丁表当前为 **83 条定义**；实际状态按当前宿主面匹配，分成已应用、待应用、跳过。
+- 补丁表当前为 **85 条定义**；实际状态按当前宿主面匹配，分成已应用、待应用、跳过。
 - 应用前把目标文件备份为 `<文件>.dshpurge.bak`，重复应用是幂等的。
 - 「还原」用备份覆盖回去并删除备份；没有备份时，至少剥掉本插件写入 shim 的行。
 - 「卸载」会先还原已应用的补丁，再删除注入文件、规则库和插件本身。
@@ -114,7 +114,7 @@ node scripts/install-offline.mjs --verify --profile desktop --dsh-home "$HOME/.d
 也可以直接安装压缩包：
 
 ```sh
-node scripts/install-offline.mjs --zip dsh-purge-1.2.2.zip --profile desktop --dsh-home "$HOME/.dsh"
+node scripts/install-offline.mjs --zip dsh-purge-1.2.3.zip --profile desktop --dsh-home "$HOME/.dsh"
 ```
 
 安装器会校验包、复制到 `$DSH_HOME/plugins/dsh-purge`、修改 profile 的 `package.json`、建立 `node_modules/dsh-purge` 链接，并写入 `desktop-install.txt`。默认**不执行 pnpm、不 Apply、不重启**。

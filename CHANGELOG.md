@@ -5,7 +5,49 @@
 
 ## 1.2.2 · 2026-11-01 · 空回合不再是一条空气
 
-补丁表 83 条（1.2.1 的 82 条 + 新增 **#90**）。
+补丁表 85 条（1.2.1 的 82 条 + #90 空回合判定 + 从上游 1.1.86 取回的 #88 / #91，
+另有三条重新编号）。
+
+### 补丁编号隔离：三条挪到 #100 起
+
+之前从 rc.2/rc.3 分支出来时，我们的 #86 / #89 / #90 和上游后来编的号撞了：
+
+| 编号 | 上游 1.1.86 是什么 | 我们（改前）是什么 |
+| --- | --- | --- |
+| #86 | `SESSION_QUEUE_STEER_INTERRUPT` | `SESSION_STEER_ALWAYS_FOLLOWUP` |
+| #89 | `SANDBOX_POLICY_BRAND_NEUTRAL` | `HUNG_PROMPT_AFTER_PERSONA` |
+| #90 | `SKILL_BADGE_DESCRIPTION_NEUTRAL` | `EMPTY_TURN_AFTER_REASONING` |
+
+同号不同物，运行上不出错（`installed-rev` 认版本号不认补丁 id），但以后想 cherry-pick 上游修复时，
+「#90 修了什么」这句话会指两件事。现在把三条挪到 **#100 / #101 / #102**，跟上游留出一段隔离带。
+
+**已经打过补丁的机器不会因此丢状态，也不会重复打补丁。** 做法是 `markersAny: true` 同时认新旧标记：
+
+```js
+// #102（原 #90）
+markersAny: true,
+markers: ["[dsh-purge-102]", "[dsh-purge-90]", "[dsh-fix 2026-11-01]"],
+```
+
+旧标记留在 markers 里，面板照旧显示 applied；新产出的文件带新标记，下次再打是空转。
+实测过：改 id 后 `patchFileOutcome` 仍是 `applied`，`applyReplacementsToText` 的 `changed` 是 `false`。
+
+### 从上游 1.1.86 取回两条
+
+| 补丁 | 做什么 |
+| --- | --- |
+| **#88 HUNG_PROMPT_STRICT_NEEDLE** | 判据比 #87 严：ChatML 头和正文尾**都**在场才算挂住，只剩一头就重新置顶。四条 replacement 覆盖 `renderedPrompt` / `system` 两种变量名 |
+| **#91 DESKTOP_HOST_SIGNAL_EXIT_LOG** | 宿主被信号杀掉时往 `%TEMP%/dsh-purge-desktop.log` 写一行持久化日志，仍然不弹对话框 |
+
+### 同步改动
+
+- `lib/core.js` `PATCH_DISPLAY_GROUPS`：`followup: [85, 100]`、`hang: [87, 88, 101]`
+- `scripts/assert-soul-guard.mjs`：`SOUL_PATCH_IDS` 里 89 → 101（灵魂层清单跟着编号走），`soul-guard.lock` 重写基线
+- `test/patch90.test.mjs` → `test/patch102.test.mjs`
+
+### 1.2.2 的主体：空回合判定（#102，原 #90）
+
+下文提到 #90 的地方，指的是现在编号为 **#102** 的那一条。
 
 这一版只有一件事：**模型把答案写进了思考通道，界面上什么都没有，而且不重试、不报错。**
 
