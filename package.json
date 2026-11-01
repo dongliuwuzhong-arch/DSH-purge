@@ -1,6 +1,6 @@
 {
   "name": "dsh-purge",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "DeepSeek Harness 0.2.1 系列兼容的提示词与宿主补丁插件：管理注入、规则集与 Skill，支持补丁应用/还原、密封 asar 自愈、会话回退和网络范围白名单。基于 YuJunZhiXue/dsh-purge 上游维护。",
   "type": "module",
   "main": "lib/index.js",
@@ -87,7 +87,7 @@
       "zip": "https://github.com/dongliuwuzhong-arch/DSH-purge/archive/refs/heads/main.zip",
       "git": "https://github.com/dongliuwuzhong-arch/DSH-purge.git"
     },
-    "version": "1.2.2"
+    "version": "1.2.3"
   },
   "publishConfig": {
     "access": "public"

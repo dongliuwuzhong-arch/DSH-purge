@@ -13,7 +13,7 @@ const LOCK = path.join(ROOT, "soul-guard.lock");
 // 注入正文本身。
 const SOUL_FILES = ["lib/default-prompt-inject.md"];
 // 决定「身份是谁、注入在哪、还在不在」的补丁：改一个字符就是改灵魂。
-const SOUL_PATCH_IDS = new Set([1, 2, 3, 4, 25, 26, 32, 40, 43, 55, 66, 71, 73, 76, 87, 89]);
+const SOUL_PATCH_IDS = new Set([1, 2, 3, 4, 25, 26, 32, 40, 43, 55, 66, 71, 73, 76, 87, 101]);
 
 const sha = (buf) => crypto.createHash("sha256").update(buf).digest("hex");
 

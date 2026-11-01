@@ -8,7 +8,7 @@ import { ALL_PATCHES, applyReplacementsToText, targetLooksPatched } from "../lib
 
 // #90 要改的是宿主里 126 KB 的适配器，不能整个 import（会拉起 pi-ai 的依赖树）。
 // 这里只把它自己的 mapStopReason 抠出来，配上最小桩，直接验判据行为。
-const PATCH = ALL_PATCHES.find((p) => p.id === 90);
+const PATCH = ALL_PATCHES.find((p) => p.id === 102);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 /**
@@ -42,7 +42,7 @@ const patched = applyReplacementsToText(pristine, PATCH, "index.js").text;
 
 test("#90 打上之后 mapStopReason 仍然可解析", () => {
   const body = wrapAsMapper(patched);
-  assert.ok(body.includes("[dsh-purge-90]"), "成品里没有 marker");
+  assert.ok(body.includes("[dsh-purge-102]"), "成品里没有 marker");
   const fn = buildMapper(body);
   assert.equal(typeof fn, "function");
 });
@@ -98,7 +98,7 @@ test("#90 对照：官方原版对空 content 已经判 EMPTY_RESPONSE（不是�
 
 test("#90 marker 认旧手打标记，避免二次叠加", () => {
   assert.equal(PATCH.markersAny, true);
-  assert.ok(PATCH.markers.includes("[dsh-purge-90]"));
+  assert.ok(PATCH.markers.includes("[dsh-purge-102]"));
   assert.ok(PATCH.markers.includes("[dsh-fix 2026-11-01]"));
 
   // 关键：手打版和自动产物的标记不一样。手打那份只有 [dsh-fix 2026-11-01]，
@@ -106,10 +106,10 @@ test("#90 marker 认旧手打标记，避免二次叠加", () => {
   // targetLooksPatched 的三级判据里只剩 marker 这一条能认出它。
   // 所以这里必须构造"只有手打标记"的样本，不能拿 replace 串冒充。
   const handwritten = PATCH.replacements[0].replace;
-  assert.ok(handwritten.includes("[dsh-purge-90]"));
+  assert.ok(handwritten.includes("[dsh-purge-102]"));
   assert.ok(!handwritten.includes("[dsh-fix 2026-11-01]"));
 
-  const oldStyle = handwritten.split("[dsh-purge-90]").join("[dsh-fix 2026-11-01]");
+  const oldStyle = handwritten.split("[dsh-purge-102]").join("[dsh-fix 2026-11-01]");
   assert.ok(!oldStyle.includes("dsh-purge"), "旧标记样本里不该有 dsh-purge 字样");
 
   // 承重的是"认不认得出已打过"，不是"会不会重打"——原文 pattern 在产物里已经没了，
@@ -120,7 +120,7 @@ test("#90 marker 认旧手打标记，避免二次叠加", () => {
   // 反向对照：把 markers 缩成只认新标记，同一个旧样本就认不出来了。
   // targetLooksPatched 的 key 参数只能查表里的补丁，所以这里直接验判据本身：
   // markersAny + every/some 的语义就是"任一命中即算打过"。
-  const newOnly = ["[dsh-purge-90]"];
+  const newOnly = ["[dsh-purge-102]"];
   const hitUnder = (markers) => markers.some((m) => oldStyle.includes(m));
   assert.equal(hitUnder(newOnly), false, "只认新标记时，旧样本必须认不出来");
   assert.equal(hitUnder(PATCH.markers), true, "认双标记时，旧样本必须认得出");
