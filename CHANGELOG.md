@@ -1244,4 +1244,43 @@ This file has no opinion about how you sound.
 ## 1.1.71 · 上游最后版本（参考）
 
 `dshTarget: 0.2.0-rc.2`。在 0.2.1 上安装会因 `{{cwd}}` 未注册而整轮 prompt 装配失败，
-表现为**对话完全发不出去、且不产生任何 renderer 报错**。
+表现为**对话完全发不出去、且不产生任何 renderer 报错**## 1.2.4 · 2026-11-06 · 适配 DSH 0.2.2-rc.1
+
+补丁表 85 条（条数不变，给 5 条加了 0.2.2 的 pattern 变体）。
+
+官方 **dsh-v0.2.2-rc.1** 于 2026-11-04 发布。拿它和 0.2.1-rc.5 的同 20 个核心包做了一次
+A/B 对打（干净的 npm 包，跑同一条补丁表），结果：**6 条会失配，其中 4 条是必需的**。
+
+| 补丁 | 0.2.2 改了什么 |
+| --- | --- |
+| **#12** APPROVAL_ASK_SENTENCE_BYPASS | 审批句前缀换了：`Approval policy: ask.` → `Approval prompts are enabled in this session:`，整句重写 |
+| **#14** ESCALATION_GRANT_UNCONDITIONAL | 中间插了一行 `displayReason: escalationDisplayReason(mode, justification)` |
+| **#67** AGENT_LOOP_MESSAGES_GUARD | 外面多包一层 `try`，缩进从 4 tab 变 5 tab，内容一字未改 |
+| **#74** ASSEMBLE_BEFORE_PRESTEP | `claim` 与 `assemble` 之间插了 `model.current()` / `tools.resolve()` / `try`；`assemble()` 也从「直接收 context」改成「收对象（带 modelSelection / toolSet）」 |
+| #62 OFFICIAL_TOOL_ASK_FAILOPEN | `=== undefined` 改写成 `=== void 0`，代码从 `lib/index.js` 挪到 `lib/pipeline.js` |
+| #60 OFFICIAL_RUN_CODE_APPROVAL_NEUTRAL | 那段模型可见文案在 0.2.2 里**被删了**，补丁失去作用对象（optional，功能上自动达成） |
+
+前四条全是审批/提权链路上的，**升级后直接被审批门拦住**——这是本次适配的主要动机。
+
+### 做法
+
+- **#12 / #14 / #67 / #62**：在原 replacements 后面追加 0.2.2 的 pattern 变体，老 pattern 保留，两个版本都能打。
+- **#74**：把准备动作插在 `claim` 之后、`selection` 之前，语义与老版一致。
+- **`lib/core.js` 的 `dsh-tools` key 同时收 `lib/pipeline.js`**：0.2.2 把工具流水线拆进了新文件，不收它 `#62` 会显示「文件缺失」。
+
+### 验证
+
+用干净的 npm 包做 A/B 对打（不是拿打过补丁的本机文件）：
+
+| 宿主 | 命中 | 必需失配 |
+| --- | --- | --- |
+| 0.2.1-rc.5 | 41 / 85 | #2 #3 #21 #24 #40 |
+| **0.2.2-rc.1** | **40 / 85** | **#2 #3 #21 #24 #40**（完全相同） |
+
+两边的必需失配**完全一致**，说明 0.2.2 上没有引入新的阻断项。差的 1 条是 #60（optional）。
+
+`#2 / #3 / #21 / #24 / #40` 是历史遗留（在 rc.5 上同样打不上），与本版无关。
+
+门禁：`patches=85 changelog=85` / `soul-guard ok`（digest 未变）/ `97 tests pass`。
+
+。

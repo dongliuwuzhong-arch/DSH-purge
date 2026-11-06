@@ -1,69 +1,59 @@
-# 1.2.3
+# 1.2.4
 
-目标宿主：DeepSeek Harness **0.2.1-rc.2 / rc.3 / rc.5**（桌面 / Web）
+目标宿主：DeepSeek Harness **0.2.1-rc.2 / rc.3 / rc.5 / 0.2.2-rc.1**（桌面 / Web）
 
-补丁表：**85 条定义**（1.2.2 的 83 条 + 从上游取回 #88 / #91，另有三条重新编号）
+补丁表：85 条定义（条数不变，给 5 条加了 0.2.2 的 pattern 变体）
 
-## 本版做两件事：编号隔离、取回上游
+## 本版只为一件事故做准备
 
-### 一、三条补丁挪到 #100 起，跟上游拉开隔离带
+官方 **dsh-v0.2.2-rc.1** 于 2026-11-04 发布。如果你升级了客户端，**旧版插件会有 6 条补丁失配，
+其中 4 条是必需的**——而且全在审批/提权链路上。表现是：审批门重新生效，操作被拦，
+但面板不会报错，你只会觉得「怎么突然又要审批了」。
 
-之前从 rc.2/rc.3 分支出来时，我们的 #86 / #89 / #90 和上游后来编的号撞了：
+这一版把 0.2.2 适配好了。
 
-| 编号 | 上游 1.1.86 是什么 | 我们改前是什么 |
+### 怎么查出来的
+
+拿 npm 上**干净的** rc.5 和 0.2.2 包（各 20 个核心包，不打任何补丁），跑同一条补丁表做 A/B 对打。
+不是拿本机已打过补丁的文件比——那样所有 pattern 都「不匹配」，看不出真问题。
+
+### 六条失配的原因
+
+| 补丁 | 0.2.2 改了什么 |
+| --- | --- |
+| **#12** 审批句自动放行 | 前缀换了：`Approval policy: ask.` → `Approval prompts are enabled in this session:`，整句重写 |
+| **#14** 提权无条件授信 | 中间插了一行 `displayReason: escalationDisplayReason(...)` |
+| **#67** messages 兜底 | 外面多包一层 `try`，缩进 4 tab → 5 tab，**内容一字未改** |
+| **#74** 首次发送前挂提示词 | `claim` 与 `assemble` 之间插了 `model.current()` / `tools.resolve()` / `try`；`assemble()` 也从收 context 改成收对象 |
+| #62 工具询问放行 | `=== undefined` → `=== void 0`，代码从 `lib/index.js` 挪到 `lib/pipeline.js` |
+| #60 run_code 描述中性化 | 那段文案在 0.2.2 里被删了，补丁失去作用对象（optional，功能上自动达成） |
+
+### 结果
+
+| 宿主 | 命中 | 必需失配 |
 | --- | --- | --- |
-| #86 | `SESSION_QUEUE_STEER_INTERRUPT` | `SESSION_STEER_ALWAYS_FOLLOWUP` |
-| #89 | `SANDBOX_POLICY_BRAND_NEUTRAL` | `HUNG_PROMPT_AFTER_PERSONA` |
-| #90 | `SKILL_BADGE_DESCRIPTION_NEUTRAL` | `EMPTY_TURN_AFTER_REASONING` |
+| 0.2.1-rc.5 | 41 / 85 | #2 #3 #21 #24 #40 |
+| **0.2.2-rc.1** | **40 / 85** | **#2 #3 #21 #24 #40**（完全相同） |
 
-同号不同物。运行上不出错（`installed-rev` 认版本号不认补丁 id），但以后想 cherry-pick 上游修复时，
-「#90 修了什么」这句话会同时指两件事。现在挪到 **#100 / #101 / #102**。
+**两边的必需失配完全一致**，说明 0.2.2 上没有引入新的阻断项。差的 1 条是 optional 的 #60。
 
-**已装机器不丢状态、不重复打补丁。** 靠 `markersAny: true` 同时认新旧标记：
+`#2 / #3 / #21 / #24 / #40` 是历史遗留问题，在 rc.5 上同样打不上，与本版无关。
 
-```js
-markersAny: true,
-markers: ["[dsh-purge-102]", "[dsh-purge-90]", "[dsh-fix 2026-11-01]"],
-```
+### 兼容性
 
-旧标记留着，面板照旧显示 applied；新产出的文件带新标记，下次再打是空转。
-真宿主实测：改号后三条仍是 `applied`，`applyReplacementsToText` 的 `changed` 是 `false`。
+老 pattern 全部保留，**rc.5 上的行为一字未变**（41 命中，与 1.2.3 相同）。
+0.2.2 的 pattern 是追加的变体，两边都能打。
 
-### 二、从上游 1.1.86 取回两条
-
-| 补丁 | 做什么 | 本机状态 |
-| --- | --- | --- |
-| **#88 HUNG_PROMPT_STRICT_NEEDLE** | 判据比 #87 严：ChatML 头和正文尾**都**在场才算挂住 | `skipped` |
-| **#91 DESKTOP_HOST_SIGNAL_EXIT_LOG** | 宿主被信号杀掉时写持久化退出日志，仍不弹对话框 | 下次应用时打上 |
-
-**#88 和 #87+#101 是互斥路线，不叠加。** 本机走 #87/#101（只看头），所以 #88 的 pattern 命中 0 次、
-恒为 skipped——这是正常的。取回它是为了跟上游对齐、方便以后比对，不是指望它在本机生效。
-
-### 同步改动
-
-- `PATCH_DISPLAY_GROUPS`：`followup: [85, 100]`、`hang: [87, 88, 101]`
-- `assert-soul-guard.mjs` 的 `SOUL_PATCH_IDS`：89 → 101，`soul-guard.lock` 重写基线
-- `test/patch90.test.mjs` → `test/patch102.test.mjs`
+`lib/core.js` 的 `dsh-tools` key 现在同时收 `lib/index.js` 和 `lib/pipeline.js`——
+0.2.2 把工具流水线拆进了新文件，不收它 #62 会显示「文件缺失」。
 
 ### 验证
 
 ```sh
-node scripts/assert-patches.mjs      # patches=85 unique_ids=ok changelog=85
-node scripts/assert-soul-guard.mjs   # soul-guard ok（digest 7e5e018f）
+node scripts/assert-patches.mjs      # patches=85 changelog=85
+node scripts/assert-soul-guard.mjs   # soul-guard ok（digest 未变，没碰灵魂层）
 node --test "test/**/*.test.mjs"     # 97 pass / 0 fail
 ```
-
-真宿主实测（`DSH_SURFACE=desktop`，宿主 9 个进程在跑）：
-
-| 补丁 | 落点 | 状态 | 会不会重复打 |
-| --- | --- | --- | --- |
-| #100 | agent-loop | applied | 否 |
-| #101 | agent-loop | applied | 否 |
-| #102 | llm-pi-ai | applied | 否 |
-| #88 | agent-loop | skipped（互斥路线） | 否 |
-| #91 | desktop-shell | 待应用 | — |
-
-#91 的 pattern 在真实 `resources/app/lib/main.js` 里命中 1 次，产物 `node --check` 通过。
 
 ---
 
