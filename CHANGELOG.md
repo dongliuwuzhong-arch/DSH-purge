@@ -3,6 +3,58 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 / rc.3 兼容变体**。
 上游以 MIT 发布，仍在维护（发版到 1.1.81，`dshTarget: 0.2.0-rc.2`）；本分支跟的是 0.2.1-rc.3。
 
+## 1.2.7 · 2026-11-06 · 修一个真 bug 和一条失配的 pattern
+
+补丁表 85 条（未增删）。
+
+### 假备份：`.dsh-purge.bak` 存的是改后内容
+
+`lib/desktop.js` 的 `repairOfficialCliAfterUnpack()` 里，写备份用的是 `atomicCopyFile`（async），
+但那个函数本身是同步的，**少了一个 await**：
+
+```js
+try { atomicCopyFile(fp, bak); } catch {}   // async，第一个 await 是 fsp.mkdir，让出执行权
+atomicWriteSync(fp, patched.text, "utf8");  // 同步写立刻落盘
+```
+
+等异步复制醒来去读 `fp`，它已经是改后的内容了。实测（真机，bug 现场的数值）：`dsh.cmd` 562 字节、
+`.dsh-purge.bak` 562 字节，`cmp` 报 IDENTICAL —— **看着有备份，实际还原不了原文**。
+（修复后实测是 `dsh.cmd` 552 / `.dsh-purge.bak` 238，两者不同。上面那组 562/562 是坏的证据，不是现状。）
+
+改成 `fs.copyFileSync(fp, bak)`（`fs` 就是 `hostFs`，带这个同步方法）。
+新增 `test/shim-bak.test.mjs`：三个用例，**直接调被修的 `repairOfficialCliAfterUnpack`**
+（造一个假安装目录：一个名叫 `DeepSeek Harness.exe` 的空文件 + `resources/runtime/cli/bin/dsh.cmd`），
+覆盖「bak 必须是改前原文」「已存在不覆盖」「幂等」。
+
+**反向验证过**：把 `desktop.js` 那行临时改回 `atomicCopyFile`，这三个用例会红 2 个；
+改回 `fs.copyFileSync` 全绿。判据能区分「修了」和「没修」，不是恒真的常识断言。
+
+### #82 的 pattern 绑错了尾部锚点，一直 0 命中
+
+原来的 pattern 是两行：
+
+```
+import { REMOTE_STREAM_MUX_PATH, parseRemoteStreamServerMessage } from "@deepseek-ai/dsh-api-gateway/stream-protocol";
+//#region ../../packages/util/home-paths/lib/index.js
+```
+
+从 0.2.2 起，那行 import 后面跟的是 **mime 的 region**（`home-paths` 挪到 1722 行去了），
+于是整条补丁 **0 命中**。它是 `optional: true` + `skipIfMarked`，只表现成 `na`，不报错 ——
+面板上看着没事，实际上「双击 exe 从 explorer 继承 env 常缺 `DSH_PROFILE` → cordis 不加载
+→ dsh-purge 插件没 activate → inject 全断」这个坑一直没兜住。
+
+现在只锚 import 行本身（全文件唯一，实测 1 次出现），replace 也不再往后面强插 home-paths 那个
+region。新增 `test/patch82.test.mjs`：四个用例，第二个专门模拟 0.2.2 的排布
+（import 后面跟 mime region），并断言那个 region 被原样保留、没被吃掉。
+
+### 验证
+
+```
+node --test test/*.test.mjs        104 pass / 0 fail
+node scripts/assert-patches.mjs    patches=85 unique_ids=ok changelog=85
+node scripts/assert-soul-guard.mjs soul-guard ok（digest 7e5e018ffdf6）
+```
+
 ## 1.2.6 · 2026-11-06 · 更正一处归因错误
 
 补丁表 85 条（未增删，只改注释与文档）。补丁逻辑与 1.2.5 **完全一致**。
