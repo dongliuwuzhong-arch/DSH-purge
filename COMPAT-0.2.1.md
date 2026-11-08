@@ -61,10 +61,12 @@ node --test "test/**/*.test.mjs"
 node scripts/check-bak-judge.mjs
 ```
 
-当前版本的本机测试为 **41 / 41 pass**；补丁表自检和关键补丁指纹校验均通过。
+当前版本的本机测试为 **104 / 104 pass**（1.2.7 起；1.2.6 是 97）；补丁表自检和关键补丁指纹校验均通过。
 
 ## 已知边界
 
+- **三层版本错位不会报错**：DSH 由外壳（exe 的 FileVersion）、主程序（`app.asar`/`app` 里的 `dsh/package.json`）、底座（`runtime/primary-runtime/runtime.json` 的 `desktopVersion`）三层组成，**官方从不拿底座版本跟主程序比对**。所以「外壳已升、底座还是旧的」能一路跑下去，界面上看不出来。升级后请自己核一次三层是否一致。
+- `desktop-shell` 相关补丁（#45/#46/#82/#83/#84/#91）在**宿主进程外**解析不到目标文件：`findDesktopAppExecutable()` 读的是 `process.execPath`，外面跑 node 时那是 node 自己。所以 `patchStatus` 在外部进程里会把这些显示成 `na` / `missing_file`，**不代表补丁有问题**。
 - 桌面壳 `resources/app/lib/main.js` 的补丁只能在真实安装上验证，仓库测试覆盖不到 Electron 壳的全部路径。
 - 官方桌面更新器写入 `app.asar` 还是已解包的 `app/`，未在所有版本上验证；升级后建议重新执行 `--status` 并检查补丁状态。
 - 本分支只维护提示词注入、宿主补丁、规则集、Skill 管理和回滚能力。
