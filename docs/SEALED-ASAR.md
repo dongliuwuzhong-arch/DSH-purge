@@ -1,4 +1,8 @@
-# 密封 asar：补丁为什么不生效，以及 1.2.1 怎么解决
+# 密封 asar：补丁为什么不生效，以及怎么修
+
+> 2026-11-08 更新：这份文档最早写于 1.2.1，只讲那一次换包。
+> 后面 1.2.2 ~ 1.2.7 又踩了几个坑，补在「四之二」那节。
+> **先读「七、判据」** —— 那是唯一能告诉你到底生效没有的东西。
 
 > 这份文档只讲一件事：**官方桌面版把代码封在 app.asar 里，而补丁只能写进解开的目录。**
 > 只要宿主还在读 asar，所有宿主代码补丁都是**空转**——界面一切正常、日志没有报错，
@@ -201,6 +205,57 @@ if (core.desktopAsarStillSealed()) {
 
 ---
 
+## 四之二、1.2.2 → 1.2.7：后来又踩到的坑（2026-11-08 补）
+
+1.2.1 解决的是「升级后补丁静默失效」。之后六版又发现四件事，其中两件是真 bug。
+
+### 1. 三层版本：错一层就是「看着升了其实没升」
+
+DSH 不是「一个程序」，是三层各自带版本：
+
+| 层 | 从哪读 | 说明 |
+|---|---|---|
+| L1 外壳 | `DeepSeek Harness.exe` 的 `VersionInfo.FileVersion` | 别读 `ProductVersion`，那个是 shell 自己的格式（显示 `0.2.2.0`） |
+| L2 主程序 | `resources\app\dsh\node_modules\@deepseek-ai\dsh\package.json` 的 `version` | 宿主读 asar 时在 asar 里 |
+| L3 底座 | `resources\runtime\primary-runtime\runtime.json` 的 `desktopVersion` | **唯一没有可见版本号的一层** |
+
+🔴 **DSH 自己从不拿 L3 跟 L2 比对。** 2026-11-06 把 213 MB 的 asar 全量翻过：`payloadDigest` 只做正则格式校验，`desktopVersion` 只在 `dsh-tool-workspace-dependencies` 里做结构校验，**零 http/fetch、从不与 app 版本比**。
+
+所以「外壳 0.2.2 + 底座 0.2.1」这种错配能一路跑下去，界面上一点看不出来，直到某天某个文件 ENOENT 才炸。
+
+→ 判据：`check-paths.mjs` 里有「三层版本一致」这一条，错位会报 `[!]` 并让退出码变 1。
+
+### 2. runtime 是可以从安装包里抠出来的
+
+之前以为 `7z l 包.exe` 列不出内容（它自动探测停在 `Type = PE`）。**加 `-tNsis` 强制按 NSIS 解析就能列**：
+
+```
+7z l -tNsis dsh-0.2.2-setup.exe
+# → 16 条，核心是 app-64.7z（292 MB，LZMA2）
+7z e -tNsis setup.exe "$PLUGINSDIR\app-64.7z"
+7z x app-64.7z "resources/runtime/*" -o"C:\Software\DSH"
+```
+
+取出来的 `runtime.json` 里 `desktopVersion` 就是真版本。这条路比整包重装安全得多 —— 重装是**整目录替换** `$INSTDIR`，会把破甲打过的宿主补丁一起抹掉。
+
+### 3. 换包的调用姿势（踩过两次）
+
+```js
+import { openSealedDesktopHost } from "./lib/core.js";
+const r = await openSealedDesktopHost({ forApply: true });
+```
+
+⚠️ **必须带 `DSH_SURFACE=desktop` 环境变量**，否则 `detectSurface()` 判成 web 面，`sealedAsarHandoff()` 返回 null，函数直接返回 `swapAsar: false` 什么都不做 —— 也不报错。
+
+它内部是安全的：先解到旁边的临时目录 → 校验里面有 `@deepseek-ai` → 才原子换入。失败会 `restoreUnusableExtract` 放回旧的。**asar 在这一步不会被挪走**，挪走是另一个函数。
+
+### 4. 1.2.7 修的两个真 bug
+
+**假备份**：`repairOfficialCliAfterUnpack()` 是同步函数，写 `.dsh-purge.bak` 用的 `atomicCopyFile` 是 async 且没 `await`，紧接着 `atomicWriteSync` 已经把文件改了。异步复制醒来读到的就是改后内容 —— **看着有备份，实际还原不了原文**。真机实测 562/562 字节，`cmp` 报 IDENTICAL。改成 `fs.copyFileSync`。
+
+**#82 失配**：pattern 绑了一个不该绑的尾部锚点 `//#region .../home-paths/lib/index.js`。0.2.2 起那行 import 后面跟的是 mime 的 region，于是整条补丁 0 命中。它是 `optional + skipIfMarked`，只表现成 `na` 不报错 —— 那个 `DSH_PROFILE` 兜底一直没生效。改成只锚 import 行本身。
+
+---
 ## 五、对你意味着什么
 
 ### 装完之后该确认什么
@@ -213,6 +268,7 @@ Get-CimInstance Win32_Process -Filter "Name='DeepSeek Harness.exe'" |
 
 # 2. 补丁有没有进进程？（应该 > 0）
 node -e "const t=require('fs').readFileSync('C:/Software/DSH/resources/app/lib/main.js','utf8'); console.log((t.match(/dsh-purge/g)||[]).length)"
+#   2026-11-06 实测 11（含 #82 那条 import 兜底；更早是 9）
 ```
 
 ### 官方更新后会发生什么
@@ -276,7 +332,10 @@ autoHealSealedAsarOnStart -> 启动时该不该自检修复残留状态
 
 ---
 
-## 八、已知问题：patch 40 与 rc.5 失配
+## 七、已知问题：patch 40 与 rc.5 失配
+
+> ⚠️ **这一节讲的是 0.2.1-rc.5 时代的判据。** 2026-11-06 宿主已升到 0.2.2-rc.1，
+> 下面是历史记录，别拿它当现在的状态核对。
 
 **现象**：`#40 COMPLETE_PROMPT_KEEP_INJECT` 在 DSH 0.2.1-rc.5 上六条 pattern 全部匹配失败，
 状态显示 `skipped`。
@@ -318,7 +377,7 @@ if (!wantsAsarSwap && options.requireClean !== false && !unpackedHostIsClean(exe
 用 `complete: true` 预设的用户会遇到注入稿被丢——这是 1.2.0 就有的老问题，不是回退。
 
 ---
-## 七、给排障的人：三个判据，别信界面
+## 八、给排障的人：判据，别信界面
 
 这个插件的毛病一直是**不报错**。以下三条是实测判据，界面显示不算：
 
