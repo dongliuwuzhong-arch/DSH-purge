@@ -3,6 +3,77 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 / rc.3 兼容变体**。
 上游以 MIT 发布，仍在维护（发版到 1.1.81，`dshTarget: 0.2.0-rc.2`）；本分支跟的是 0.2.1-rc.3。
 
+## 1.3.2 · 2026-11-14 · A2 草案落地：6 条失配补丁重新打上 + 两个坏掉的 file 键
+
+补丁表 87 条（未增删）。这一版只做两件事：把 A2 审计给出的 6 条修订草案落进表里，
+把 `targetFiles()` 里两个恒为 `undefined` 的 file 键修好。
+
+### 为什么会有这一版
+
+0.2.2-rc.3 把 6 条补丁的目标对象搬了家或换了写法，pattern 因此全部落空：
+#32 #40 #53 #54 #60 #62 这 6 条在宿主上一致报 `skipped`。其中 #40 还会在有人开 complete 人设时
+**静默丢掉整个 dsh-purge 注入段**（不报错），#60 让 PTC 每轮都在读「要理由、要审批」的话术。
+
+### 六条补丁：老 pattern 一条没删，新 pattern 追加
+
+| # | 宿主把东西搬到哪了 | 改动 |
+| --- | --- | --- |
+| 32 | `dsh-harness-dev-context` 的 WEB_SURFACE_PROMPT | 加 file 键 `harness-dev-context`；+3 条 replacement（首行措辞、变量描述 Canonical→Advertised、运行期上下文行） |
+| 40 | `dsh-system-prompt` 换成「先 return {...transformed, tools} 再走 sections」 | +1 条 replacement（在 waterfall 结果里捞 `dsh-purge*` 段，拼到 complete 段前面），老 6 条（含 r0 正则）原样留着 |
+| 53 | 禁止另开 server 那句搬进 `dsh-harness-dev-context` | 加 file 键；+1 条带「反引号带反斜杠」锚的 replacement |
+| 54 | 提示词整段搬到 `dsh-deliverable-file-references` | 加 file 键 `deliverable-refs`，pattern 一字未改 |
+| 60 | run_code 工具整体搬到 `dsh-tool-executor-ptc` | 加 file 键 `run-code`，四句 pattern 一字未改 |
+| 62 | 拒绝理由从裸对象换成 `approvalDenial(reason, CODE)` | +2 条 replacement（两个分支），老 5 条原样留着 |
+
+**#53 有一处是收窄不是追加，写清楚**：老的 r1 是「裸句删除」（pattern 只有那句禁止语），
+而 `dsh-harness-dev-context/lib/index.js:42` 的 `LEGACY_WEB_SURFACE.suffix` 里**同一句也有一份**，
+宿主注释明写「不许跟现行文案一起改，否则历史会话匹配不上会重写已记录的提示词」。
+裸句 pattern 会把两处一起删（实测少 256 字节，legacy 被改），所以撤掉 r1，换成带反引号锚的版本
+（实测只少 129 字节，legacy 第 42 行一个字节没动）。带锚点的版本覆盖同一批模板字面量，旧宿主也在内。
+
+### targetFiles()：两个坏掉的文件键 + 三个新键
+
+`system-prompt` 与 `preset-sdk-minimal` 用的是 `firstExisting` + 裸 `path.join(aiBase, ...)`，
+在「`app/dsh/node_modules/@deepseek-ai`」这套解包布局下恒为 `undefined`（#40 因此少一个目标文件、
+#80 少一个）。改成 `nestedPkg`（同时认 `<aiBase>/<pkg>` 和 `<aiBase>/dsh/node_modules/@deepseek-ai/<pkg>`），
+monorepo 兜底路径保留。新增 `harness-dev-context` / `deliverable-refs` / `run-code` 三个键，同样走 nestedPkg。
+
+### 三条退休（只加注释，不动结构）
+
+- **#56 / #77**：rc.3 把「回退只藏被切的那段」做成了官方机制（`surfaceOp: { op: "replace", startSeq, endSeq }`），
+  `conversation-client` 已是 27 行压缩 bundle，`hidden.add(` / `rewindVisibleEntries` / `append(record) {` 全树 0 命中。
+  这两条从来没打上，撤掉收益为零，留着只会让人下次再去修一遍 —— 加注释说明「宿主已实现，留作记录」。
+- **#80**：`minimal.patch.yml` 里的 `tool-fs` 是官方条目（带 `config: read/readImage/write/edit`），
+  `tool-fs-search` / `tool-web` 的 purge 追加内容在本机从未存在过。加注释说明「官方自带，留作记录」。
+
+### 测试
+
+新增 `test/patch-r3-drafts.test.mjs` 8 条：6 条各自用 rc.3 原样抠出来的片段验「命中 + 幂等 + marker 自洽」，
+再钉两条结构断言（六条都保留老 pattern；#56 #77 #80 的结构没被删）。
+#53 那条额外断言 `LEGACY_WEB_SURFACE` 那一行一个字节都没动。
+
+### 判据（本轮实测）
+
+- **宿主**（`resources/app/dsh/node_modules/@deepseek-ai`）`patchStatus`：改前 applied 62/87、pending 2；
+  改后 pending 6、applied 仍 62 —— 因为**这一轮只改插件、不往宿主落盘**（宿主一个字节都没写），
+  6 条从 `skipped` 变成 `pending` 就是「现在点应用真的会改到东西」的证据；内存回放里它们全部 `pending → applied`。
+- 内存回放（`applyReplacementsToText` + `patchFileOutcome`，线上同一函数）：6 条 × 每个目标文件都是
+  `changed=true` / 幂等 / 原文残留 0 / marker 命中（明细见 `记录/实现-A5-草案落地.md`）。
+
+### 灵魂层（soul-guard.lock 重写）
+
+`#32` `#40` 在 `SOUL_PATCH_IDS` 里，改它们就会顶到灵魂层基线，所以 `assert-soul-guard.mjs --update` 重写了 `soul-guard.lock`。
+**理由**：这两条改的是「宿主措辞/返回顺序变了，补丁跟着搬」，不是把身份文案往软里改 ——
+`#32` 只是把「DeepSeek Harness Web GUI」换成「local web GUI」（与原意完全一致），
+`#40` 只是把「complete 分支保住 dsh-purge 段」这件事对着新的返回顺序重做一遍，注入正文一个字没动。
+
+### 三道门
+
+```
+node scripts/assert-patches.mjs      → patches=87 unique_ids=ok changelog=87 ✓
+node scripts/assert-soul-guard.mjs   → --update 重写基线（#32 #40 属灵魂层，理由见上）
+node --test "test/*.test.mjs"        → 123 条全过（115 → 123，新增 8 条）
+```
 ## 1.3.1 · 2026-11-14 · 审计抓到的两处：一条假绿 + 一处漏网
 
 补丁表 87 条（86 → 87，新增 104 AGENT_PRESTEP_MESSAGES_GUARD）。
