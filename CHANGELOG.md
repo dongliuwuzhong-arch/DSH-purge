@@ -3,6 +3,40 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 / rc.3 兼容变体**。
 上游以 MIT 发布，仍在维护（发版到 1.1.81，`dshTarget: 0.2.0-rc.2`）；本分支跟的是 0.2.1-rc.3。
 
+## 1.3.1 · 2026-11-14 · 审计抓到的两处：一条假绿 + 一处漏网
+
+补丁表 87 条（86 → 87，新增 104 AGENT_PRESTEP_MESSAGES_GUARD）。
+
+### #73 PRESET_BASH_MIRROR_LINE：marker 撞车，删除从没执行过
+
+它的 `markers` 写着 `[dsh-purge] preset shell network` —— 那是 **#70** 写的标记，
+再挂上 `skipIfMarked: true`，marker 一命中就判 applied，于是那句
+"Network access depends on the task environment…" 在 `minimal.patch.yml:59` **一直还在**。
+去掉 `skipIfMarked`，让删除真的发生（marker 留着给状态判定用）。
+
+### #104 AGENT_PRESTEP_MESSAGES_GUARD：`dsh-agent` 里还有一处裸解引用
+
+```js
+// dsh-agent/lib/index.js:235
+if (decision.messages.length === 0 && (step === 1 || messages.length > 0)) return decision;
+```
+
+#67 只守了 `dsh-agent-loop` 那处，而这行在 **pre-step waterfall 里更早执行**，
+`decision.messages` 为 undefined 时先炸的就是它。新增 #104 补上，并在 `targetFiles()` 里
+加了 `agent` 别名（`dsh-agent/lib/index.js`）。
+
+### 顺带记两笔（不改代码，写进文档免得下次误判）
+
+- **#17 在运行时是空转的**：`dsh-base/cordis.patch.yml:292-294` 里 `fs-observation-policy` 是
+  `disabled: true`，那个插件根本不组装 —— 补丁把文件改了，但运行时没人用。
+  `tools.edit` 不先读也能改，是因为宿主那句 `editText(..., expected?.kind)` 本来就带可选判断，
+  **不是 #17 的功劳**（2026-11-14 更正上一轮的说法）。
+- **#6 SANDBOX_DENY_FILE_WRITE 改的是 `seatbeltProfileArgs()`**，macOS 专用，本机（Win）无效。
+
+### 测试
+
+新增 `test/patch104.test.mjs` 两条：`#104` 命中且幂等；`#73` 必须真的删掉那行（并断言 `skipIfMarked` 已关）。
+
 ## 1.3.0 · 2026-11-14 · 适配 0.2.2-rc.3
 
 补丁表仍是 86 条，未增删；只给三条非可选补丁加了 rc.3 形态的 pattern。

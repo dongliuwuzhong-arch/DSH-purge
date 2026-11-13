@@ -1,26 +1,20 @@
-# 1.3.0
+# 1.3.1
 
-适配 0.2.2-rc.3。补丁表仍是 86 条，只给三条非可选补丁加了 rc.3 形态的 pattern。
+审计抓到的两处：一条假绿、一处漏网。补丁表 86 → 87 条。
 
-## 为什么是这三条
+## #73 假绿
 
-rc.3 把裸 `throw new Error(...)` 换成了带错误码的 `SandboxEscalationError(..., "SANDBOX_ESCALATION_*")`，
-于是 #13（升级阶梯豁免）、#35（被拒仍授信）、#18（重复调用守卫）三条的 pattern 全部失配——
-这三条一失效，沙箱升级到更宽模式会真的抛错、工具调用被打断。
+`PRESET_BASH_MIRROR_LINE` 的 marker 写成了 #70 的那条，加上 `skipIfMarked`，
+marker 一命中就判 applied —— 那句 "Network access depends on the task environment…" 其实一直在
+`minimal.patch.yml:59`，删除从来没执行过。去掉 `skipIfMarked`。
 
-## 怎么验的
+## #104 新增：dsh-agent 的 pre-step 也有裸解引用
 
-从官方 night 源下 rc.3 安装包，解出 `resources\app.asar`（209 MB），把 86 条补丁引用的
-57 个目标文件全部抽出来，用 `patchFileOutcome()` 逐条量：**目标文件一个都没少**，
-能落地 63 条（6 条上游已含），新增失配 9 条（其中 3 条非可选，就是本次修的）。
+`dsh-agent/lib/index.js:235` 的 `decision.messages.length` 在 pre-step waterfall 里
+比 #67 守的 agent-loop 更早执行，#67 兜不住。新增 #104 补上，`targetFiles()` 增加 `agent` 别名。
 
-## 测试
+## 两笔记账（不改代码）
 
-新增 `test/patch13-rc3.test.mjs`：三段 rc.3 原文各验命中 + 幂等 + marker 自洽，
-外加一条「三条都必须保留旧的 rc.1 pattern」。
-
-## 升级提醒
-
-**这次升级会把你重新封回 asar。** rc.3 的安装包里 `resources\app.asar` 是单个 209 MB 文件，
-装上之后宿主读 asar，解包目录里的那 70 多条补丁全部空转且不报错。顺序是：
-先升破甲 → 再升 DSH → 用面板解封（注意别拿旧的 rc.1 树顶着）→ 重打 → `check-paths` 全绿再收工。
+- #17 运行时空转：`dsh-base/cordis.patch.yml` 里 `fs-observation-policy` 是 `disabled: true`，
+  插件不组装；`tools.edit` 免读可用是宿主自己的可选判断，不是这条补丁的功劳。
+- #6 只对 macOS 的 seatbelt 生效，本机无效。
