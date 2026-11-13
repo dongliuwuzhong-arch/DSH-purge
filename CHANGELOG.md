@@ -3,6 +3,49 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 / rc.3 兼容变体**。
 上游以 MIT 发布，仍在维护（发版到 1.1.81，`dshTarget: 0.2.0-rc.2`）；本分支跟的是 0.2.1-rc.3。
 
+## 1.3.0 · 2026-11-14 · 适配 0.2.2-rc.3
+
+补丁表仍是 86 条，未增删；只给三条非可选补丁加了 rc.3 形态的 pattern。
+
+### 怎么量的（不是猜的）
+
+从官方 night 源拉 rc.3 安装包（299,595,752 字节，直连 4 秒），7-Zip 解
+`$PLUGINSDIR\app-64.7z` → `resources\app.asar`（209 MB），把 86 条补丁引用的
+**57 个目标文件全部从 asar 里抽出来**，用本仓库自己的 `patchFileOutcome()` 逐条量。
+
+结果：**57 个目标文件一个都没少，目录布局与包名不变**；能落地 63 条（其中 6 条是上游已含：
+#2 #3 #21 #24 #50 #71），rc.3 新增失配 9 条，其中 3 条非可选。
+
+### 三条非可选：官方把裸 Error 换成了带错误码的 SandboxEscalationError
+
+```js
+// rc.1
+throw new Error(`sandbox escalation to "${mode}" is not strictly wider ...`);
+// rc.3
+throw new SandboxEscalationError(`sandbox escalation to "${mode}" is not strictly wider ...`, "SANDBOX_ESCALATION_INVALID_ARGUMENT");
+```
+
+- **#13 ESCALATION_WIDENING_EXEMPT**：三行全变（类名 + 尾部错误码参数）。
+- **#35 ESCALATION_NEVER_REJECT**：switch 里三种失败都换类，`cancelled` 还多了一行 `throwIfAborted()`。
+- **#18 REPEAT_TOOL_REMINDER_DISABLED**：post-execute 里的 `block` 分支被官方删了，整块文本变短。
+
+三条都按「老的 rc.1 pattern 保留 + 新增 rc.3 pattern」处理，不丢旧宿主。
+
+⚠️ 这三条一失效，**行为会退化而不是纸面警告**：沙箱升级到更宽模式会真的抛
+`SANDBOX_ESCALATION_INVALID_ARGUMENT` / `..._REJECTED`，工具调用被打断。
+
+### 测试
+
+新增 `test/patch13-rc3.test.mjs` 四条：三段 rc.3 原文（从 asar 里原样抠出来的）各验一遍
+命中 + 幂等 + marker 自洽，再钉一条「三条都必须保留旧的 rc.1 pattern」。
+
+### 升级顺序（写进文档了）
+
+1. 备份 `resources\app\`、`~/.dsh/plugins`、`node_modules/dsh-purge`
+2. **先升破甲到 1.3.0**（就是这版）
+3. 再升级 DSH 到 rc.3
+4. 升级后宿主会重新封回 asar → `check-paths` 第一条变红 → 用面板解封重打 → 再验全绿
+
 ## 1.2.9 · 2026-11-13 · #17 补完，;#67 伪造的「未应用」
 
 补丁表 86 条（未增删，只修两条补丁的定义与标记）。
