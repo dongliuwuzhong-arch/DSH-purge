@@ -3,9 +3,52 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 / rc.3 兼容变体**。
 上游以 MIT 发布，仍在维护（发版到 1.1.81，`dshTarget: 0.2.0-rc.2`）；本分支跟的是 0.2.1-rc.3。
 
+## 1.2.8 · 2026-11-13 · 补上 #103，并修掉「备份缺口」的假警报
+
+补丁表 86 条（含 1.2.7 那次没发出去的 103 WORKSPACE_INIT_ERROR_LOG）。
+
+### 103 为什么没跟着 1.2.7 发出去
+
+11-12 加了 #103，只改了本地文件，没提版本号，也没 push —— 于是「1.2.7」在本地和仓库
+指的是两份不同的东西（本地 86 条，`main` 上 85 条）。这次连版本号一起补上。
+
+`#103 WORKSPACE_INIT_ERROR_LOG`：把 `storageDomain.open` 那段包进 try/catch，
+失败时把堆栈写进 `~/.dsh/logs/workspace-init-error.log` 再原样 rethrow。
+起因是 `workspace.json` 的 `createdAt` 写成数字、schema 拒收，UI 只显示
+`workspaceController unavailable`，没有堆栈没有日志，只能靠"最近改过什么"反推。
+
+⚠️ 加完补丁记得**重启宿主再点应用**：插件是 ESM，宿主启动时 import 一次，
+改盘上的 `lib/patches.js` 不会让正在跑的进程认识新 id，`purge_apply` 会用旧表静默跳过。
+
+### 备份缺口：把「上游已经包含」错报成「原件要另外找回」
+
+`backupGap()` 在 bak 缺失时只看 `targetLooksPatched()`，而它只问「替换后的文本在不在」，
+不问这条替换到底改没改东西。上游新版本把补丁要做的事自己做了之后：
+
+```
+patternHit=false   replaceAlreadyThere=true   applyReplacementsToText().changed=false
+```
+
+文件一字节都没被打过，面板却催人去追一个不存在的原件（11-13 冤枉了三个
+`dsh-session-reference` 文件，它们与 `app.asar.dshpurge-away` 里的原件逐字节相同）。
+
+改成 missing 分支也跑一次 `keyIsNoop()`：
+
+```js
+if (!fs.existsSync(bak)) {
+  missing.push(fp);
+  if (looks && !keyIsNoop(text, keys, fp)) patched.push(fp);
+  continue;
+}
+```
+
+新增 `test/backupgap-noop.test.mjs`：两条用例，一条造「上游已包含」的文本（必须是
+`missing` 但不是 `patched`），一条造真能改动的文本（必须照报 `patched`）。
+第二条是把断言钉在「修了也还能认出真问题」上 —— 只写第一条的话，把 `patched` 整个删掉也是绿的。
+
 ## 1.2.7 · 2026-11-06 · 修一个真 bug 和一条失配的 pattern
 
-补丁表 85 条（未增删）。
+补丁表 86 条（新增 103 WORKSPACE_INIT_ERROR_LOG，诊断用，不改行为）。
 
 ### 假备份：`.dsh-purge.bak` 存的是改后内容
 

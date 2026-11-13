@@ -1,37 +1,32 @@
-# 1.2.7
+# 1.2.8
 
-修一个真 bug 和一条失配的 pattern。补丁表仍是 85 条，未增删。
+补上 1.2.7 漏发的 #103，修掉「备份缺口」的假警报。补丁表 86 条。
 
-## 假备份：`.dsh-purge.bak` 存的是改后内容
+## 补上 #103 WORKSPACE_INIT_ERROR_LOG
 
-`lib/desktop.js` 的 `repairOfficialCliAfterUnpack()` 里写备份用的是 `atomicCopyFile`（async），
-但那个函数本身是同步的，**少了一个 await**：
+11-12 加了这条诊断补丁，只改了本地文件没提版本，于是「1.2.7」在本地和 `main` 上是两份东西
+（本地 86 条 / 仓库 85 条）。这次连版本号一起补。
 
-```js
-try { atomicCopyFile(fp, bak); } catch {}   // async，第一个 await 是 fsp.mkdir，让出执行权
-atomicWriteSync(fp, patched.text, "utf8");  // 同步写立刻落盘
-```
+它把 `storageDomain.open` 那段包进 try/catch，失败时把堆栈写进
+`~/.dsh/logs/workspace-init-error.log` 再原样 rethrow。不改行为，只在出事时留下证据。
+起因：`workspace.json` 的 `createdAt` 写成数字、schema 拒收，UI 只有一句
+`workspaceController unavailable`，没堆栈没日志，只能靠"最近改过什么"反推。
 
-等异步复制醒来去读 fp，它已经是改后的内容了。实测：`dsh.cmd` 562 字节、
-`.dsh-purge.bak` 562 字节，`cmp` 报 IDENTICAL —— **看着有备份，实际还原不了原文**。
+## 备份缺口不再冤枉「上游已经包含」的文件
 
-改成 `fs.copyFileSync(fp, bak)`。新增 `test/shim-bak.test.mjs`（3 个用例，含"不 await 会坏"的对照组）。
+`backupGap()` 在 bak 缺失时只看 `targetLooksPatched()`，而它只问「替换后的文本在不在」，
+不问这条替换到底改没改东西。上游把补丁要做的事自己做了之后，
+`patternHit=false / replaceAlreadyThere=true / changed=false`，文件一字节没被打过，
+面板却报「已带补丁痕迹：原件要另外找回」。
 
-## #82 的 pattern 绑错了尾部锚点
+改成 missing 分支也跑一次 `keyIsNoop()`。新增 `test/backupgap-noop.test.mjs` 两条用例：
+一条确认「上游已包含」只进 `missing`、不进 `patched`；一条确认真被打过的文件照旧进 `patched`。
 
-原来的 pattern 是「那行 `import { REMOTE_STREAM_MUX_PATH, ... }` + `//#region ../../packages/util/home-paths/lib/index.js`」。
-从 0.2.2 起，那行 import 后面跟的是 mime 的 region，home-paths 挪到 1700 多行去了，
-于是整条补丁 **0 命中**。
+## 文档
 
-它是 `optional: true` + `skipIfMarked`，所以只表现成 `na`，不报错 —— 面板上看着没事，
-实际上「双击 exe 从 explorer 继承 env 常缺 DSH_PROFILE → cordis 不加载 → inject 全断」这个坑没兜住。
+`README.zh-CN.md` / `COMPAT-0.2.1.md` 的补丁表计数 85 → 86。
 
-现在只锚 import 行本身（全文件唯一，实测 1 次）。新增 `test/patch82.test.mjs`（4 个用例）。
+## 提醒
 
-## 验证
-
-```
-node --test test/*.test.mjs     104 pass / 0 fail
-node scripts/assert-patches.mjs patches=85 unique_ids=ok changelog=85
-node scripts/assert-soul-guard.mjs  soul-guard ok (digest 7e5e018ffdf6)
-```
+加完补丁**先重启宿主，再用 `purge_status` 确认新 id 出现在列表里，然后才点应用**。
+插件是 ESM，宿主启动时 import 一次；改盘上的 `lib/patches.js` 不会让正在跑的进程认识新 id。
