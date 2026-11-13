@@ -3,6 +3,38 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 / rc.3 兼容变体**。
 上游以 MIT 发布，仍在维护（发版到 1.1.81，`dshTarget: 0.2.0-rc.2`）；本分支跟的是 0.2.1-rc.3。
 
+## 1.2.9 · 2026-11-13 · #17 补完，;#67 伪造的「未应用」
+
+补丁表 86 条（未增删，只修两条补丁的定义与标记）。
+
+### #17 FS_OBSERVATION_INTENT_FREE：写放行了，改没放行
+
+0.2.2-rc.1 把 `editIntent` 简化成一行 `return this.requirePresent(target, actor, "edit");`，
+而补丁的 pattern 还锚在 0.2.1 那版带 `owner`/`prior` 的结构上 —— 一字不差却再也命中不了。
+补丁有两条 marker 且 `markersAny:false`，只命中 write 那条时整条判 `skipped`，
+**「半打」这个状态被整个藏起来**，看着像没打过。
+
+实测（不是读码猜的）：
+
+```
+tools.write 一个没读过的文件 → create 成功              ✅ 写放行了
+tools.edit  同一个文件       → "file has not been read"  ❌ 改仍被拦
+```
+
+修法：给 #17 补一条 0.2.2 形状的 replacement（老的 0.2.1 那条保留，别丢旧宿主）。
+
+### #67 AGENT_LOOP_MESSAGES_GUARD：面板说「没打」，其实早打上了
+
+宿主 `dsh-agent-loop/lib/index.js` 里躺着
+`// [dsh-purge] 0.2.2 guard undefined messages`，补丁声明的 marker 却是不带 `0.2.2` 的那条
+（它自己的第二处 replacement 就写着带版本号的标记，markers 里没有）。`includes` 不认 → 恒 skipped。
+改成 `markersAny: true` + 两条 marker 都收。
+
+### 测试
+
+新增 `test/patch17.test.mjs` 三条：两条都改得到且幂等、**只打一半时必须报 pending**、
+#67 自己的产出能被自己的 markers 认成 applied。
+
 ## 1.2.8 · 2026-11-13 · 补上 #103，并修掉「备份缺口」的假警报
 
 补丁表 86 条（含 1.2.7 那次没发出去的 103 WORKSPACE_INIT_ERROR_LOG）。

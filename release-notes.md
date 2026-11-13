@@ -1,32 +1,19 @@
-# 1.2.8
+# 1.2.9
 
-补上 1.2.7 漏发的 #103，修掉「备份缺口」的假警报。补丁表 86 条。
+补完 #17，修掉 #67 那条误报。补丁表仍是 86 条，未增删。
 
-## 补上 #103 WORKSPACE_INIT_ERROR_LOG
+## #17 写放行了、改没放行
 
-11-12 加了这条诊断补丁，只改了本地文件没提版本，于是「1.2.7」在本地和 `main` 上是两份东西
-（本地 86 条 / 仓库 85 条）。这次连版本号一起补。
+0.2.2-rc.1 把 `editIntent` 简化成 `return this.requirePresent(target, actor, "edit");`，
+补丁的 pattern 还锚在 0.2.1 的旧结构上，再也命中不了；两条 marker 只要缺一条整条就判 skipped，
+于是「半打」被藏了起来。实测：`tools.write` 不读可写，`tools.edit` 仍报
+`file has not been read`。这次补上 0.2.2 形状的 pattern，老的那条保留。
 
-它把 `storageDomain.open` 那段包进 try/catch，失败时把堆栈写进
-`~/.dsh/logs/workspace-init-error.log` 再原样 rethrow。不改行为，只在出事时留下证据。
-起因：`workspace.json` 的 `createdAt` 写成数字、schema 拒收，UI 只有一句
-`workspaceController unavailable`，没堆栈没日志，只能靠"最近改过什么"反推。
+## #67 面板误报
 
-## 备份缺口不再冤枉「上游已经包含」的文件
+补丁自己产出的标记带 `0.2.2`，markers 里只有不带版本号的那条，于是打完仍显示 skipped。
+改成 `markersAny: true`，两条都认。
 
-`backupGap()` 在 bak 缺失时只看 `targetLooksPatched()`，而它只问「替换后的文本在不在」，
-不问这条替换到底改没改东西。上游把补丁要做的事自己做了之后，
-`patternHit=false / replaceAlreadyThere=true / changed=false`，文件一字节没被打过，
-面板却报「已带补丁痕迹：原件要另外找回」。
+## 测试
 
-改成 missing 分支也跑一次 `keyIsNoop()`。新增 `test/backupgap-noop.test.mjs` 两条用例：
-一条确认「上游已包含」只进 `missing`、不进 `patched`；一条确认真被打过的文件照旧进 `patched`。
-
-## 文档
-
-`README.zh-CN.md` / `COMPAT-0.2.1.md` 的补丁表计数 85 → 86。
-
-## 提醒
-
-加完补丁**先重启宿主，再用 `purge_status` 确认新 id 出现在列表里，然后才点应用**。
-插件是 ESM，宿主启动时 import 一次；改盘上的 `lib/patches.js` 不会让正在跑的进程认识新 id。
+新增 `test/patch17.test.mjs`：三条用例，其中一条专门钉「只打一半不能报 applied」。
