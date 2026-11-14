@@ -12,7 +12,7 @@
 拆法（Windows / 7-Zip）：
 
 ```bash
-7z e -o<dir> setup.exe "*.7z"                        # 取出内层 app-64.7z
+7z e -o<dir> setup.exe "$PLUGINSDIR\app-64.7z"      # 内层是这个名字；用 "*.7z" 通配会静默解出 0 个
 7z x -o<dir> <dir>\app-64.7z "resources\app.asar"    # 7-Zip 的 asar codec 会直接解成目录
 node bin/asar-unpack.mjs <asar 文件> <输出目录>        # 或者用仓库自带的解包器
 ```
@@ -21,7 +21,7 @@ node bin/asar-unpack.mjs <asar 文件> <输出目录>        # 或者用仓库�
 
 **路径里只要出现 `app.asar` 这一段，宿主自带的 fs 层就会去当 asar 档案解析**，
 子进程里 `existsSync` 全是 false。所以影子树不能直接叫 `...\resources\app.asar\...`，
-要么改名成 `tree`，要么只把需要的文件拷出来做镜像（本机做法：`mirror-<ver>`，63 个文件）。
+要么改名成 `tree`，要么只把需要的文件拷出来做镜像（本机做法：`mirror-<ver>`，rc.1/rc.2/rc.3 各 62 个文件，0.2.1-rc.3 是 59 个）。
 
 ## 跑什么
 

@@ -21,7 +21,7 @@
 > Since 1.2.1 the post-upgrade self-heal is automatic; see [`docs/SEALED-ASAR.md`](docs/SEALED-ASAR.md).
 `dsh-purge` is a prompt and host-patch plugin for a local DeepSeek Harness install. It adds a **Clean** dock beside the session title for managing prompts, rule sets, skills, and host patches. Nothing is written to the host until you explicitly apply it.
 
-This repository is a compatibility fork of the upstream project, tracking DSH **0.2.1-rc.2 / rc.3 / rc.5**. It keeps the upstream patch system and injection flow, and maintains the host-version mappings, desktop path handling, backup/revert checks, and install notes. It is not a from-scratch replacement, and it does not hide where it came from.
+This repository is a compatibility fork of the upstream project, tracking DSH **0.2.2-rc.3**. It keeps the upstream patch system and injection flow, and maintains the host-version mappings, desktop path handling, backup/revert checks, and install notes. It is not a from-scratch replacement, and it does not hide where it came from.
 
 ## What it actually includes
 
@@ -48,7 +48,7 @@ The **dsh-purge** button beside the session title opens a right-hand dock. It cu
 
 ### Patches
 
-- The patch table currently defines **85 patches**. Actual status is matched against the current host surface and reported as applied, pending, or skipped.
+- The patch table currently defines **87 patches**. Actual status is matched against the current host surface and reported as applied, pending, or skipped.
 - Before the first apply, each target is backed up as `<file>.dshpurge.bak`; repeated applies are idempotent.
 - **Restore** copies backups back and removes them. If a backup is missing, at least the plugin's shim lines are stripped.
 - **Uninstall** restores applied patches first, then removes the inject file, rule library, and the plugin itself.
@@ -76,7 +76,7 @@ Model tools: `purge_status`, `purge_apply`, `purge_revert`.
 
 ## Compatibility
 
-- Official desktop: DeepSeek Harness **0.2.1-rc.2 / 0.2.1-rc.3 / 0.2.1-rc.5**
+- Official desktop: DeepSeek Harness **0.2.2-rc.3**; also verified on 0.2.1-rc.3 / 0.2.2-rc.1 / 0.2.2-rc.2 (shadow install)
 - Official Web: the 0.2 line of `dsh web`
 - Node.js **>= 18**; **Node >= 22** is recommended on Windows to avoid console flashes
 - Web and desktop are installed and applied separately, each with its own profile and `$DSH_HOME`
@@ -182,7 +182,7 @@ Compare numbers only within one surface. When an optional package is not install
 ## Upstream and license
 
 - Upstream project: [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge)
-- This branch starts from upstream **1.1.71** and tracks compatibility with DSH 0.2.1-rc.2 / rc.3 / rc.5
+- This branch starts from upstream **1.1.71** and tracks compatibility with DSH 0.2.2-rc.3
 - License: MIT, see [LICENSE](LICENSE)
 - Copyright for upstream work remains with its authors and contributors; this repository is responsible only for the compatibility changes
 

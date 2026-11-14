@@ -3,6 +3,38 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 / rc.3 兼容变体**。
 上游以 MIT 发布，仍在维护（发版到 1.1.81，`dshTarget: 0.2.0-rc.2`）；本分支跟的是 0.2.1-rc.3。
 
+## 1.3.4 · 2026-11-14 · 文档校正 + 仓库脱敏
+
+补丁表 87 条未变，代码逻辑未变。这一版只动文档与元数据。
+
+### 文档校正（校对子代理逐条实测，11 处）
+
+- 两个 README 里 `85 patches` / `86 条定义` 与头部的 87 打架 → 统一 87。
+- 兼容口径统一到 **0.2.2-rc.3**（另注明 0.2.1-rc.3 / 0.2.2-rc.1 / rc.2 做过影子验证），
+  `package.json` 的 `dshTarget` 从 `"0.2.1-rc.5 / 0.2.2-rc.1"` 改过来。
+- `docs/zh/02-patches.md`：状态判据顺序写反了（实际是**先 marker 结算、再回头看原文**），
+  分层表按实际 layer 分布重写（提示词 25 / 代码 51 / 工具 8 / 0.1.5 兼容 1 / 0.2.0 兼容 2），
+  补一句"7 条仍是 `patterns/replace/marker` 旧形态"。
+- `docs/zh/03-backup-revert.md`：补 `unrevertable` 桶；`check-bak-judge.mjs` 必须带 aiBase 参数（不带 exit 2）。
+- `docs/zh/04-shadow-test.md`：`7z e ... "*.7z"` 实测静默解出 0 个，内层真名是 `$PLUGINSDIR\app-64.7z`；镜像文件数 62（0.2.1 是 59）。
+- `docs/zh/05-known-limits.md`：裸 aiBase 路径键实为 **19 个**（原写 8）；`missing_file` 在镜像上恒为 2 条（#71 / #83）；
+  `user-approval-invariant` 在 rc.3 里根本不存在 → #5/#9/#12 是单腿绿；`client.js` 精确到 704,147 字节 / 27 行。
+- `docs/zh/06-audits.md`：报告路径 `docs/audits/` → `docs/zh/audits/`。
+
+### 仓库脱敏
+
+所有提交里的本机绝对路径替换成占位符（重写了历史）：
+
+| 原样 | 现在 |
+| --- | --- |
+| 用户目录 | `%USERPROFILE%` |
+| 工作区目录 | `%WORKSPACE%` |
+| 安装目录 | `%INSTALL_DIR%` |
+| 影子实验室 | `%SHADOW%` |
+| 主机名 | `%HOSTNAME%` |
+
+审计报告里的实测输出保持原样，只替换路径本身。
+
 ## 1.3.3 · 2026-11-14 · 影子安装四个纯净版本，抓出两个 P0
 
 补丁表 87 条（未增删）。这一版只修影子实验室跑出来的两个会真坏事的缺陷。
@@ -1314,7 +1346,7 @@ git 的 eol 归一化不处理孤立 CR），`normalizeText()` 已一并处理�
 
 `purge_status` / `dsh-purge --status` 现在多一行「运行副本 / runtime」：
 
-    ✓ 运行副本 / runtime: pack-test 1.1.85-dsh 已同步 %USERPROFILE%\pack-test\node_modules\dsh-purge
+    ✓ 运行副本 / runtime: pack-test 1.1.85-dsh 已同步 %USERPROFILE%\...\pack-test\node_modules\dsh-purge
     ✗ 运行副本 / runtime: pack-test 1.1.84-dsh 与源码差 3 个文件：lib/core.js, lib/index.js ...
         fix: node scripts/sync-runtime.mjs --apply（源码 1.1.85-dsh / 副本 1.1.84-dsh）
 

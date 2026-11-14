@@ -1,39 +1,45 @@
 # 补丁表（87 条）
 
-补丁按"层"分五类，每条都有 `id` / `name` / `desc` / `file` / `replacements` / `markers`。
+每条补丁都有 `id` / `name` / `desc` / `file`，然后二选一的改法：
+
+- 现代写法：`replacements: [{ pattern, replace }]` + `markers`
+- 早期写法：`patterns` / `replace` / `marker`（87 条里有 7 条还是这个形态：#5 #6 #7 #8 #10 #15 #16）
+
 可选补丁带 `optional: true`——目标不存在时判 `na`，不算失败。
 
-## 分层的意义
+## 分层（实测分布，合计 87）
 
-| 层 | 管什么 | 改坏了的后果 |
-| --- | --- | --- |
-| 提示词 / Prompt | 人格、口径、身份句 | 上下文里换个人说话 |
-| 代码 / Code | 宿主 JS 逻辑（沙箱、审批、prune） | 功能异常，可能起不来 |
-| 工具 / Tools | 工具描述与 schema | 模型对工具的理解跑偏 |
-| 0.1.5 兼容 | 老版本兜底 | 只影响老宿主 |
-| 预设 / Preset | `presets/*.patch.yml` | 该预设装不起来 |
+| layer | 条数 | 管什么 | 改坏了的后果 |
+| --- | --- | --- | --- |
+| 提示词 / Prompt | 25 | 人格、口径、身份句 | 上下文里换个人说话 |
+| 代码 / Code | 51 | 宿主 JS 逻辑（沙箱、审批、prune、guard） | 功能异常，严重时起不来 |
+| 工具 / Tools | 8 | 工具描述与 schema | 模型对工具的理解跑偏 |
+| 0.1.5 兼容 | 1 | 老版本兜底 | 只影响老宿主 |
+| 0.2.0 兼容 | 2 | 中间版本兜底 | 同上 |
 
-## 状态怎么判的
+## 状态是怎么判的
 
-`patchFileOutcome()` 只看三件事：
+`patchFileOutcome()` 的实际顺序（`lib/core.js`）：
 
-1. **原文还在不在**（`pattern` 能命中）→ 在就是 `pending`（该打没打）
-2. **marker 在不在**（`markers` 命中）→ 在就是 `applied`
-3. `skipIfMarked: true` 时 marker 一命中直接算完成，不再看原文
+1. **先看 marker 结算**：补丁的 `markers` 命中当前文件 → 直接 `applied`
+2. **再回头看原文**：`pattern` 还能命中、且这处替换"做了有用"（`staleActionableReplacement`）→ `pending`
+3. 两样都不成立 → `skipped`（灰）
+4. `skipIfMarked: true` 的补丁，marker 一命中就结算，不再看原文
 
-⚠️ 这套判据有两个已知盲区，做判断时要记得：
+### 两个真实盲区（不是猜测，是测出来的）
 
-- **打完之后原文就没了**，所以补丁一旦被打上又被人工改回去，状态会掉到 `skipped`（灰），
-  而不是 `pending`，点「应用」也打不回来——因为 pattern 再也对不上。
-- **多目标补丁（如 #70）只要有一个文件还留着 marker，整条就报 applied**，别的目标漏了看不出来。
+- **marker 命中即 applied，多目标补丁会因此假绿**。#70 挂在 `preset-minimal` 与 `preset-sdk-minimal`
+  两个文件上，只要其中一个留着 marker，整条就报 applied，另一个漏了看不出来。
+- **人工把文件改回原文，状态会退回 `pending`（不是 skipped）**，点一次「应用」还能打回来。
+  `skipped` 只在 pattern 彻底消失（宿主改版）时出现——那时才真的打不回来。
 
 ## 几个值得单独记的条目
 
 | 补丁 | 事 |
 | --- | --- |
-| #17 FS_OBSERVATION_INTENT_FREE | **运行时空转**：`dsh-base/cordis.patch.yml` 里 `fs-observation-policy` 是 `disabled: true`，插件根本不组装。`tools.edit` 不先读也能改，是宿主自己的可选判断，不是这条补丁的功劳。 |
+| #17 FS_OBSERVATION_INTENT_FREE | **运行时空转**：`dsh-base/cordis.patch.yml` 里 `fs-observation-policy` 是 `disabled: true`，插件根本不组装。`tools.edit` 不先读也能改，是宿主 `editText(..., expected?.kind)` 自己的可选判断，不是这条补丁的功劳。 |
 | #43 WEB_PRESET_IDENTITY_STRIP | 1.3.3 前在 0.2.2-rc.2 上会把预设打成非法 YAML（身份句多一行没吃掉）。已修。 |
-| #56 REWIND_HIDE_CUT_ONLY | rc.2/rc.3 的 `client.js` 被压成 27 行，四条 pattern 全含缩进，必然失配。宿主靠 `surfaceOp` 自己处理，这条留作记录。 |
+| #56 REWIND_HIDE_CUT_ONLY | rc.2/rc.3 的 `client.js` 是 704,147 字节 / 27 行的压缩构建，四条 pattern 全含 `\n\t\t` 缩进，必然失配。宿主靠 `surfaceOp` 自己处理，这条留作记录。 |
 | #67 / #104 | `decision.messages` 裸解引用有两处：`dsh-agent-loop` 和 `dsh-agent`。后者在 pre-step waterfall 里更早执行，#67 兜不住，1.3.1 加的 #104 才补上。 |
 | #73 PRESET_BASH_MIRROR_LINE | 1.3.1 前是**假绿**：marker 抄了 #70 的，`skipIfMarked` 一命中就报 applied，删除从来没执行过。 |
 | #103 WORKSPACE_INIT_ERROR_LOG | 插 import + try/catch，**不落 `dsh-purge` 字样**——这正是 1.3.3 那个"备份被覆写"P0 的触发点。 |

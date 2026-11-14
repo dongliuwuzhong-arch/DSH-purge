@@ -13,7 +13,13 @@
 ## 回滚
 
 `revertAll(aiBase)` 把 bak 覆盖回去，然后删掉 bak。判据是 `sameFileBytes`：
-**bak 和现文件字节相同就当"没被动过"，直接跳过**。
+bak 与现文件字节相同就跳过——不过这时要看它落在哪个桶里：
+
+- **`skipped`**：文件确实没被动过
+- **`unrevertable`**：bak == 现文件，**而这个文件还带着补丁痕迹** → 这份"备份"是假的，回滚不掉，必须单独报出来
+
+`backupGap()` 对应三类：`missing`（压根没 bak）、`suspect`（bak == 现文件又不算空操作）、
+`noop`（补丁本来就是空操作，bak == 现网属正常）。
 
 ## 1.3.3 修的 P0：假备份是怎么来的
 
@@ -24,16 +30,16 @@ fs.writeFileSync(fp, originalBuf);   // originalBuf = 当前文件
 ```
 
 于是只要判据误判一次（#103 那种不落标记的补丁必然误判），**唯一一份原件就被换成打完补丁的版本**。
-之后 `revertAll` 看到 bak == 现文件，认定"没被动过"，`restored 0 / skipped N` —— 回滚能力归零，
-而面板还显示"备份齐全"。
+之后 `revertAll` 看到 bak == 现文件，把它归进跳过，`restored 0 / skipped N` —— 回滚能力归零，
+而面板还显示备份齐全。
 
-影子里的现场：
+影子里的现场（干净 rc.3 镜像）：
 
 ```
 backupAll   → 文件 40014(打过) / bak 39521(原件)
 apply ×1    → bak 39521
 inspect     → bak 变成 40014     ← 原件没了
-revertAll   → restored=0 skipped=6，文件仍是 40014
+revertAll   → restored=0，文件仍是 40014
 ```
 
 **1.3.3 之后**：默认只报告不落地，要刷新必须显式传 `{ apply: true }`；
@@ -42,8 +48,9 @@ revertAll   → restored=0 skipped=6，文件仍是 40014
 ## 自查
 
 ```bash
-node scripts/check-bak-judge.mjs     # 判据自检
+# 必须显式给 aiBase，不带参直接 exit 2
+node scripts/check-bak-judge.mjs <安装目录>/resources/app/dsh/node_modules/@deepseek-ai
 ```
 
-面板里看三行：`备份 ✓`、`空操作备份 N 个`（bak == 现网但补丁本来就是空操作，正常）、
-`备份缺口`（missing / suspect，这两类要处理）。
+面板里看三行：`备份 / backup: 有`、`空操作备份 / no-op bak: N 个`（正常）、
+`备份缺口 / backup gap`（missing / suspect，这两类要处理）。
