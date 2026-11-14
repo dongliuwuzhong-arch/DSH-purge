@@ -3,6 +3,63 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 / rc.3 兼容变体**。
 上游以 MIT 发布，仍在维护（发版到 1.1.81，`dshTarget: 0.2.0-rc.2`）；本分支跟的是 0.2.1-rc.3。
 
+## 1.3.3 · 2026-11-14 · 影子安装四个纯净版本，抓出两个 P0
+
+补丁表 87 条（未增删）。这一版只修影子实验室跑出来的两个会真坏事的缺陷。
+
+### P0-1 · inspectStaleBaks 会把唯一一份原件覆盖掉
+
+```js
+fs.writeFileSync(fp, originalBuf);   // originalBuf = 当前文件 = 打过补丁的版本
+```
+
+`targetLooksPatched` 一旦误判（#103 那种"插一段 import、不落 dsh-purge 字样"的补丁必然误判，
+外加旧键走裸 aiBase 路径时 `keys` 拿到空数组），这个函数就会把 `.dshpurge.bak` 改成打完补丁的内容。
+之后 `revertAll` 用 `sameFileBytes` 认定"文件没被动过"直接跳过 —— **回滚能力当场归零，面板还显示备份齐全**。
+
+影子复现（干净 rc.3 镜像）：
+
+```
+backupAll  → 文件 40014(打过) / bak 39521(原件)
+apply ×1   → 文件 40014       / bak 39521
+inspectStaleBaks(dryRun:false) → bak 变成 40014   ← 原件没了
+revertAll  → restored=0 skipped=6，文件仍是 40014
+```
+
+改法：默认只报告不落地，要刷新必须显式传 `{ apply: true }`；`keys` 为空时退回全表 marker 扫描。
+
+### P0-2 · #43 在 0.2.2-rc.2 上把 cordis 预设打坏
+
+rc.2/rc.3 的预设里身份句后面多一行 `You help the user customize DeepSeek Harness itself.`，
+而 #43 的 pattern 只吃两行，打完留下悬挂标量：
+
+```
+config:
+  prefix: ""
+    You help the user customize DeepSeek Harness itself.   ← 非法
+```
+
+用宿主自带 yaml 解析器实测：rc.2 打完 PARSE FAIL（`All mapping items must start at the same column`）。
+新增一条三行形态 pattern 放在最前面，rc.2/rc.3 命中、0.2.1/rc.1 不命中。
+
+### 影子实验室的结果（作为背景）
+
+四棵出厂树（0.2.1-rc.3 / 0.2.2-rc.1 / rc.2 / rc.3）各跑一遍 backupAll → apply ×2 → inspect → revert：
+
+```
+四版 bak 打前打后完全一致（bak稳定=true）
+四版 revert 后逐字节回到原件（还原=true）
+四版 cordis 预设 prefix 下一行都是 "- id:"（无悬挂）
+```
+
+87 条 × 4 版矩阵里 85 条表现完全一致；只有 `#40`（0.2.1 差一个 tools 字段）与
+`#56`（rc.2/rc.3 的 client.js 被压成 27 行，pattern 必然失配）不同 —— 这两条留待后续，不影响本机。
+
+### 顺带记账（不改代码）
+
+- `targetFiles()` 有 8 处键用了裸 aiBase 路径，导致 19 个文件被判 missing_file（文件其实在盘上）。
+- `#56` 在当前 rc.3 上是空转（client.js 已压缩成一行，四条 pattern 全 0 命中），注释已注明。
+
 ## 1.3.2 · 2026-11-14 · A2 草案落地：6 条失配补丁重新打上 + 两个坏掉的 file 键
 
 补丁表 87 条（未增删）。这一版只做两件事：把 A2 审计给出的 6 条修订草案落进表里，

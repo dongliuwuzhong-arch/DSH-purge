@@ -172,11 +172,17 @@ test("inspectStaleBaks 预演只报不写，真跑才刷 bak", () => {
   assert.equal(dry.skippedPatched, 1);
   assert.equal(fs.readFileSync(stray + core.BAK_SUFFIX, "utf8"), "old build\n");
 
-  const refreshed = core.refreshStaleBaksForUpgrade(aiBase);
+  // 1.3.3 起：默认只报告，不落盘。要刷新必须显式 apply:true。
+  const reported = core.refreshStaleBaksForUpgrade(aiBase);
+  assert.deepEqual(reported.map((p) => path.resolve(p)), [path.resolve(stray)]);
+  assert.equal(fs.readFileSync(stray + core.BAK_SUFFIX, "utf8"), "old build\n", "默认不许改写 bak");
+
+  const refreshed = core.refreshStaleBaksForUpgrade(aiBase, { apply: true });
   assert.deepEqual(refreshed.map((p) => path.resolve(p)), [path.resolve(stray)]);
   assert.equal(fs.readFileSync(stray + core.BAK_SUFFIX, "utf8"), "new build\n");
   assert.equal(
     fs.readFileSync(patchedTarget + core.BAK_SUFFIX, "utf8"),
     "// header\n" + rep.pattern + "\n",
+    "认得出是我们打过的版本，即使 apply:true 也不碰",
   );
 });

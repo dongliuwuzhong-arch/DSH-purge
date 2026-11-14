@@ -94,15 +94,23 @@ test("现网已带补丁痕迹时 backupAll 拒建假原件", async () => {
   assert.equal(fs.existsSync(bak), false, "拒建时不该留下 bak");
 });
 
-test("假升级：现网换了内容且无补丁痕迹 → bak 刷新到新内容", async () => {
+test("假升级：现网换了内容且无补丁痕迹 → 只报告，绝不自动改写 bak（1.3.3）", async () => {
+  // 2026-11-14 影子安装实测：原来这里会无条件把 bak 覆盖成现网内容，
+  // 一旦判据误判（#103 那种插 import 不落标记的补丁），唯一一份原件就被毁掉，
+  // revertAll 还会因为 bak == 现网而判定「没被动过」直接跳过。默认改成只报告。
   fs.rmSync(aiBase, { recursive: true, force: true });
   put(bak, "// host 0.2.1 baseline\nmodule.exports = { v: 1 };\n");
   put(target, "// host 0.2.2 upgraded\nmodule.exports = { v: 2 };\n");
   assert.equal(targetLooksPatched(fs.readFileSync(target, "utf8"), "agent-instructions"), false);
 
-  const refreshed = refreshStaleBaksForUpgrade(aiBase);
-  assert.ok(refreshed.some((p) => lower(p) === lower(target)), "没有识别为过期 bak");
-  assert.ok(fs.readFileSync(bak).equals(fs.readFileSync(target)), "bak 没刷新到现网内容");
+  const reported = refreshStaleBaksForUpgrade(aiBase);
+  assert.ok(reported.some((p) => lower(p) === lower(target)), "没有识别为过期 bak");
+  assert.ok(!fs.readFileSync(bak).equals(fs.readFileSync(target)), "默认路径不许改写 bak");
+
+  // 显式要求刷新时才落盘（升级流程真要重建基线时用）
+  const applied = refreshStaleBaksForUpgrade(aiBase, { apply: true });
+  assert.ok(applied.some((p) => lower(p) === lower(target)));
+  assert.ok(fs.readFileSync(bak).equals(fs.readFileSync(target)), "apply:true 时必须真的刷新");
 });
 
 test("同一文件挂在两个 file key 下：bak 只建一份，回滚不报假缺口", async () => {
