@@ -1,9 +1,31 @@
 # dsh-purge
 
-**DSH 0.2.1-rc.2 / rc.3 / rc.5 / 0.2.2-rc.1 兼容变体 · 1.2.7**
+**DSH 0.2.2-rc.3 兼容变体 · 1.3.3**
+
+> 📚 **中文文档在 [docs/zh/README.md](docs/zh/README.md)**：安装与升级、补丁表全表、备份与回滚语义、影子测试方法、已知限制、审计报告（A1–A8）。
 
 - 上游：[YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge)
 - 本仓库：[dongliuwuzhong-arch/DSH-purge](https://github.com/dongliuwuzhong-arch/DSH-purge)
+- 实测版本：0.2.1-rc.3 · 0.2.2-rc.1 · 0.2.2-rc.2 · 0.2.2-rc.3（影子安装，四棵出厂树）
+- 补丁表 **87 条**，测试 126 条
+
+## 当前状态（1.3.3）
+
+| 项 | 值 |
+| --- | --- |
+| 补丁表 | 87 条，最大 id 104 |
+| 测试 | 126 pass / 0 fail |
+| 实测宿主 | 0.2.2-rc.3（外壳 / 主程序 / 底座三层一致） |
+| 实测坐标系 | 0.2.1-rc.3 · 0.2.2-rc.1 · 0.2.2-rc.2 · 0.2.2-rc.3 四棵出厂树 |
+| 最近三版 | 1.3.1 #73 假绿 / #104 新增 · 1.3.2 六条失配重打 · 1.3.3 备份覆写 / #43 打坏 rc.2 预设 |
+
+三条会真坏事的教训，写在这儿免得翻 CHANGELOG：
+
+1. **备份会被判据误判吃掉**。1.3.3 前 `inspectStaleBaks` 会把 `.dshpurge.bak` 刷成"打完补丁的版本"，
+   之后回滚判"没被动过"直接跳过 —— 面板显示齐全，实际回不去。
+2. **补丁"applied"不等于生效**。#17 的目标插件在上游配置里是 `disabled: true`；#56 的 `client.js` 被压成 27 行；
+   #73 曾靠 marker 撞车假装 applied。
+3. **解封那一步必须等宿主正常退出**。运行时改名 `app.asar` 必然 EBUSY，硬杀也会留子进程句柄。
 
 > 🔴 **先读这一条：补丁生效需要一个前提。**
 >

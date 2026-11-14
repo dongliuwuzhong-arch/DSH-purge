@@ -42,6 +42,12 @@ config:
 用宿主自带 yaml 解析器实测：rc.2 打完 PARSE FAIL（`All mapping items must start at the same column`）。
 新增一条三行形态 pattern 放在最前面，rc.2/rc.3 命中、0.2.1/rc.1 不命中。
 
+### 文档（docs/zh）
+
+新增六篇中文文档 + 八份审计报告原文 + 影子数据摘要；两个 README 的版本号从 1.2.7 更正到 1.3.3，
+并加了「当前状态」小节，把三条最容易踩的教训写在最前面。`bin/asar-unpack.mjs` 一并入库，
+`docs/zh/04-shadow-test.md` 里的命令可以照着跑。
+
 ### 影子实验室的结果（作为背景）
 
 四棵出厂树（0.2.1-rc.3 / 0.2.2-rc.1 / rc.2 / rc.3）各跑一遍 backupAll → apply ×2 → inspect → revert：

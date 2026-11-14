@@ -1,9 +1,13 @@
 # dsh-purge
 
-**DSH 0.2.1-rc.2 / rc.3 / rc.5 / 0.2.2-rc.1 compatibility fork · 1.2.7**
+**DSH 0.2.2-rc.3 compatibility fork · 1.3.3**
+
+> 📚 **Chinese docs: [docs/zh/README.md](docs/zh/README.md)** — install/upgrade, full patch table, backup & revert semantics, shadow-test method, known limits, audit reports (A1–A8).
 
 - Upstream: [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge)
 - This fork: [dongliuwuzhong-arch/DSH-purge](https://github.com/dongliuwuzhong-arch/DSH-purge)
+- Tested on: 0.2.1-rc.3 · 0.2.2-rc.1 · 0.2.2-rc.2 · 0.2.2-rc.3 (shadow install, four pristine trees)
+- Patch table: **87 patches**, 126 tests
 
 > 🔴 **Read this first: host patches need a precondition to take effect.**
 >
