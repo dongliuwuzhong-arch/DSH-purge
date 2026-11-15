@@ -3,6 +3,47 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 / rc.3 兼容变体**。
 上游以 MIT 发布，仍在维护（发版到 1.1.81，`dshTarget: 0.2.0-rc.2`）；本分支跟的是 0.2.1-rc.3。
 
+## 1.3.5 · 2026-11-15 · 人格基线不再每步重发
+
+补丁表 88 条（87 → 88，新增 105 AGENT_INSTRUCTIONS_SURFACE_DEDUPE）。
+
+### 现象（实测，不是听说）
+
+扫最近 30 场会话：**18 场 minimal 里 13 场有重复注入**，liangshen 12 场零重复。
+
+| 会话 | 步数 | 注入份数 | 重复 | 重复字符 |
+| --- | --- | --- | --- | --- |
+| 41be9747（minimal 子代理） | 13 | 14 | 12 | 414,836 |
+| ff755c60（minimal 子代理） | 21 | 22 | 20 | 690,396 |
+| cbc9338b（minimal 主会话） | 2228 | 1150 | 1094 | **36,404,485** |
+
+重复的几份**字节完全相同**（同 sha1、同长度），所以不是 budget 抖动、也不是文件被改。
+
+### 根因
+
+`dsh-agent-instructions` 的 `compose()` 用 `visibleBaselineSource(agent, authorityMessages)` 判断"基线还在不在"，
+而 `authorityMessages` 是**本步 claimed 的消息**（宿主 `agent/pre-step` 传的 `messages` 就是 claimed）。
+注入走的是 `decision.messages.toSpliced(...)` 这条路，消息进了出站列表、没进 inbox；
+下一步 claimed 里自然没有它 → 判「无基线」→ 重新渲染并再 push 一份。
+
+宿主里 `syncInbox` 早就有一条正确判据：按 `agent.session.surface.nodes` 比对同 payload 的 user/message，
+但它只在 reject/空决策那条分支用，splice 这条没用。
+
+### 修法
+
+pre-step 在 splice 前先查 surface：#105 插一段
+`const dshPurgeOnSurface = desired !== void 0 && agent.session.surface.nodes.some(...)`，
+命中就 `return decision`，不再 push。
+
+判据与 `syncInbox` 同源，所以压缩把旧基线条目从 surface 摘掉之后，这里会重新注入——**"人格不丢"不受影响**。
+
+### 顺带更正一条流传的说法
+
+"两个 agent-instructions 注入器、budget 不同所以每步抖"——**不成立**。
+`cordis.patch.yml:1897` 那条全局行只有 `disabled: false`，不带 config，不另起实例；
+三个 preset 行（1525/1614/1740）才是 `maxBytes: 98304` 的来源。
+重复内容字节一致也排除了 budget 抖动。
+
 ## 1.3.4 · 2026-11-14 · 文档校正 + 仓库脱敏
 
 补丁表 87 条未变，代码逻辑未变。这一版只动文档与元数据。

@@ -1,15 +1,18 @@
-# 1.3.4
+# 1.3.5
 
-文档校正 + 仓库脱敏。补丁表 87 条、代码逻辑均未变。
+人格基线不再每步重发。补丁表 87 → 88（新增 #105）。
 
-## 校正了什么
+## 实测
 
-校对子代理拿 `assert-patches`、`node --test`、`core.js` 行号逐条打了文档，抓到 11 处：
-补丁数三个值并存（85/86/87）、兼容口径还写着 0.2.1-rc.5、状态判据顺序写反、
-`7z e "*.7z"` 静默解 0 个、`check-bak-judge.mjs` 不带参数必挂、裸 aiBase 键数量（8 → 19）、
-`client.js` 字节数、审计目录路径。全部按实测改。
+最近 30 场会话：minimal 18 场里 13 场重复，liangshen 12 场零重复。
+最坏一场 2228 步注入 1150 份、重复 36.4 MB 字符；重复份字节完全相同。
 
-## 脱敏
+## 根因
 
-仓库历史里所有本机绝对路径替换为 `%USERPROFILE%` / `%INSTALL_DIR%` / `%WORKSPACE%` / `%SHADOW%` / `%HOSTNAME%`，
-历史重写后强制推送。审计报告里的实测输出只替换路径本身，结论与数字未动。
+`compose()` 只在"本步 claimed 消息"里找基线，而注入是 splice 进出站列表的，
+下一步 claimed 里没有 → 判无基线 → 再 push。宿主 `syncInbox` 有 surface 去重判据，splice 这条路没走。
+
+## 修法
+
+#105 在 pre-step 的 splice 前查 `agent.session.surface.nodes` 里有没有同 payload 的 user/message，
+命中就跳过。压缩把旧条目摘掉后仍会重新注入，人格不丢。

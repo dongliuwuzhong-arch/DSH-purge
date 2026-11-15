@@ -7,7 +7,7 @@
 - Upstream: [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge)
 - This fork: [dongliuwuzhong-arch/DSH-purge](https://github.com/dongliuwuzhong-arch/DSH-purge)
 - Tested on: 0.2.1-rc.3 · 0.2.2-rc.1 · 0.2.2-rc.2 · 0.2.2-rc.3 (shadow install, four pristine trees)
-- Patch table: **87 patches**, 126 tests
+- Patch table: **88 patches**, 126 tests
 
 > 🔴 **Read this first: host patches need a precondition to take effect.**
 >
@@ -48,7 +48,7 @@ The **dsh-purge** button beside the session title opens a right-hand dock. It cu
 
 ### Patches
 
-- The patch table currently defines **87 patches**. Actual status is matched against the current host surface and reported as applied, pending, or skipped.
+- The patch table currently defines **88 patches**. Actual status is matched against the current host surface and reported as applied, pending, or skipped.
 - Before the first apply, each target is backed up as `<file>.dshpurge.bak`; repeated applies are idempotent.
 - **Restore** copies backups back and removes them. If a backup is missing, at least the plugin's shim lines are stripped.
 - **Uninstall** restores applied patches first, then removes the inject file, rule library, and the plugin itself.
