@@ -43,3 +43,18 @@
 | #67 / #104 | `decision.messages` 裸解引用有两处：`dsh-agent-loop` 和 `dsh-agent`。后者在 pre-step waterfall 里更早执行，#67 兜不住，1.3.1 加的 #104 才补上。 |
 | #73 PRESET_BASH_MIRROR_LINE | 1.3.1 前是**假绿**：marker 抄了 #70 的，`skipIfMarked` 一命中就报 applied，删除从来没执行过。 |
 | #103 WORKSPACE_INIT_ERROR_LOG | 插 import + try/catch，**不落 `dsh-purge` 字样**——这正是 1.3.3 那个"备份被覆写"P0 的触发点。 |
+
+
+## 附：#19「工具结果剪枝禁用」为什么禁
+
+这条不是后来加的，是 2026-10-18 首次导入补丁表时就带的（提交 `54b4f2a`），当时没留下理由。
+2026-11-15 补记依据（代码 + 实测）：
+
+1. 剪枝会**重写会话历史里的旧消息**（中间段换成 `[... tool result middle pruned ...]`）。前缀一变，
+   这条消息之后的请求全部掉出 prefix cache，省下的字符未必抵得过缓存失效。
+2. 被剪掉的内容模型拿不回来，需要时只能重新读文件 / 重跑命令，等于多花一轮。
+3. 真正被剪的比例很低：宿主默认阈值 8,192 字符，而实测工具结果平均 1,218～2,234 字符/次。
+
+**想要「温和档」不必改补丁代码**：把宿主 `lib/index.js` 还原成同目录的 `.dshpurge.bak`，
+再把预设里 `tool-result-pruner` 的 `thresholdChars` 调到 32768（配置层，升级不冲突）。
+注意破甲**没有**「排除单条补丁」的开关，下一次 `--apply` 会按 marker 把它写回来。
