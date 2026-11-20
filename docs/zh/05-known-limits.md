@@ -1,14 +1,23 @@
-# 已知限制（截至 1.3.3）
+# 已知限制（截至 1.4.0）
 
 诚实清单。当前这台机器（Windows / 0.2.2-rc.3）不受影响，换环境就会咬人。
 
-## 1. `targetFiles()` 有 19 个键走裸 aiBase 路径
+## 1. `missing_file` 的口径，以及"单腿绿"
 
-后果：**影子镜像上 `missing_file` 恒为 2 条**（#71 的目标在 `~/.dsh` 里、#83 在宿主进程外解析不到），
-其余是"文件没被这个键指到"而不是"文件不存在"。典型受害者是 **`#5 / #9 / #12`**：
-它们的第二目标 `user-approval-invariant` 在 rc.3 里根本不存在（`dsh-user-approval/lib` 只有
-`index.js` 与 `types/index.js`），所以这三条是**单腿绿**——主目标打上了，副目标从来没碰过，
-而面板只会说 applied。
+`targetFiles(aiBase)`（`lib/core.js:3258`）在现网 rc.3 树上解析出 **57 个键 / 60 个路径**（实测）：
+59 个落在 `@deepseek-ai` 下，1 个指向 `~/.dsh` 里的预设文件（`preset-liangshen-pkg`）。
+
+- 一个目标都解析不到、补丁又不是 `optional` → `missing_file`（`core.js:4260`）；`optional` 的落 `na`。
+- **现网实测 `missing_file = 0`**（applied 68 / na 15 / skipped 4 / 排除 1）。
+- 影子镜像上曾出现 2 条（#71 的目标在 `~/.dsh` 里、#83 在宿主进程外解析不到）；A6 复核时按
+  "optional 应算 na"的口径又记成 7 条。**这个数字取决于镜像怎么拼，不要当常量抄**；
+  A6 / A7 里"19 个裸键"与"13 个裸键"也是两套口径，同样别抄。
+
+真正的风险不在 `missing_file`，在**单腿绿**：多目标补丁里一个目标打上了、另一个目标压根解析不到，
+`patchStatus` 仍然报 `applied`（那一票 `missing` 不参与降级，`core.js:4256-4260`），面板看不出副目标从没被碰过。
+典型是 **`#5 / #9 / #12`** 的第二目标 `user-approval-invariant`：rc.3 的 `dsh-user-approval/lib`
+只有 `index.js` 与 `types/index.js`，没有 `invariant.js`，所以这三条现在是 applied（实测），
+但保住的只是主目标。
 
 ## 2. `desktop-shell` 会被区域门整条丢掉
 
@@ -17,8 +26,11 @@
 
 ## 3. 判据的盲区
 
-- **marker 命中即 applied**：多目标补丁（#70）只要一个文件留着 marker，整条就报完成，其它目标漏了看不出来。
-- 打完补丁原文就没了：人工改回原文会退回 `pending`（还能打回去）；`skipped` 只在 pattern 彻底消失时出现。
+- **多目标补丁的部分完成看不出来**：#70 只要一个目标 applied、另一个漏了，整条仍报 `applied`
+  （另一个是 `pending` 时整条才降级）；只有另一个是 `skipped` 的那种才算假绿。
+- 打完补丁原文就没了：人工改回原文会退回 `pending`（还能打回去）。
+  其它终态各有各的来源：`strictFiles` 对不上是 `unmatched`、非 optional 一个目标都解析不到是 `missing_file`、
+  `skipped` 只在没结算且原文也改不动时出现——全表见 [02-补丁表](02-patches.md)。
 
 ## 4. 两条跨版本还缺补丁
 

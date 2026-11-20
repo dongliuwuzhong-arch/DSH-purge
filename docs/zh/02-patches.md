@@ -1,9 +1,9 @@
-# 补丁表（87 条）
+# 补丁表（88 条）
 
 每条补丁都有 `id` / `name` / `desc` / `file`，然后二选一的改法：
 
 - 现代写法：`replacements: [{ pattern, replace }]` + `markers`
-- 早期写法：`patterns` / `replace` / `marker`（87 条里有 7 条还是这个形态：#5 #6 #7 #8 #10 #15 #16）
+- 早期写法：`patterns` / `replace` / `marker`（88 条里有 7 条还是这个形态：#5 #6 #7 #8 #10 #15 #16）
 
 可选补丁带 `optional: true`——目标不存在时判 `na`，不算失败。
 
@@ -12,26 +12,45 @@
 | layer | 条数 | 管什么 | 改坏了的后果 |
 | --- | --- | --- | --- |
 | 提示词 / Prompt | 25 | 人格、口径、身份句 | 上下文里换个人说话 |
-| 代码 / Code | 51 | 宿主 JS 逻辑（沙箱、审批、prune、guard） | 功能异常，严重时起不来 |
+| 代码 / Code | 52 | 宿主 JS 逻辑（沙箱、审批、prune、guard） | 功能异常，严重时起不来 |
 | 工具 / Tools | 8 | 工具描述与 schema | 模型对工具的理解跑偏 |
 | 0.1.5 兼容 | 1 | 老版本兜底 | 只影响老宿主 |
 | 0.2.0 兼容 | 2 | 中间版本兜底 | 同上 |
 
 ## 状态是怎么判的
 
-`patchFileOutcome()` 的实际顺序（`lib/core.js`）：
+两级：`patchStatus()` 先按"宿主面"过滤，再逐文件问 `patchFileOutcome()`，最后收成一条补丁一个终态。
 
-1. **先看 marker 结算**：补丁的 `markers` 命中当前文件 → 直接 `applied`
-2. **再回头看原文**：`pattern` 还能命中、且这处替换"做了有用"（`staleActionableReplacement`）→ `pending`
-3. 两样都不成立 → `skipped`（灰）
-4. `skipIfMarked: true` 的补丁，marker 一命中就结算，不再看原文
+**单个文件**（`lib/core.js:3850-3859`）：
+
+1. 先判**结算**（`filePatchSettled()`）：markers 命中、或者替换后的文本已经在。
+2. **结算了不等于完事**：只要这条补丁没声明 `skipIfMarked`，而文件里还留着一处**非幂等**的
+   replacement 能改（`staleActionableReplacement()`，`core.js:3825-3837`）→ `pending`；否则 `applied`。
+3. 没结算、但原文还改得动（`patchHasRemainingWork()`）→ `pending`。
+4. 都不成立 → `skipped`。
+
+第 2 步是 1.1.98 那次「#26 假绿」修复的产物：markers 是"任一标记即通过"，只改了一半也会判完成，
+所以结算之后还得回头看有没有留下的活（`core.js:3842-3848` 的注释）。声明了 `skipIfMarked` 的按设计不再重打，维持 `applied`。
+
+**收成一条补丁的终态**（`core.js:4256-4260`，优先级从上到下）：`pending` → `applied` → `unmatched` →
+`skipped` → `na` / `missing_file`。一共 6 种：
+
+| 终态 | 怎么来的 | 面板含义 |
+| --- | --- | --- |
+| `na` | `patchAppliesHere()` 为假（`core.js:4225`） | 这条在这个宿主面上不跑（桌面 / Web 面差异，不只来自 `optional`） |
+| `pending` | 上面第 2、3 步 | 点「应用」会变 |
+| `applied` | 上面第 2 步 | 打上了 |
+| `unmatched` | 补丁带 `strictFiles`、原文对不上（`core.js:4252`） | 声明"必须逐字匹配"的补丁失配 |
+| `skipped` | 上面第 4 步 | 灰：再点也不会变 |
+| `missing_file` | 非 `optional`、且一个目标都没解析到（`core.js:4260`） | 文件不在这棵树里 |
 
 ### 两个真实盲区（不是猜测，是测出来的）
 
-- **marker 命中即 applied，多目标补丁会因此假绿**。#70 挂在 `preset-minimal` 与 `preset-sdk-minimal`
-  两个文件上，只要其中一个留着 marker，整条就报 applied，另一个漏了看不出来。
+- **多目标补丁的"部分完成"看不出来**。#70 挂在 `preset-minimal` 与 `preset-sdk-minimal` 两个文件上：
+  一个目标 `applied`、另一个漏了，整条仍报 `applied`（另一个是 `pending` 时整条才降成 `pending`）。
+  只有"另一个目标 `skipped`"那种才是假绿——面板不会告诉你哪个文件没打上。
 - **人工把文件改回原文，状态会退回 `pending`（不是 skipped）**，点一次「应用」还能打回来。
-  `skipped` 只在 pattern 彻底消失（宿主改版）时出现——那时才真的打不回来。
+  `skipped` 只在"没结算、而且原文也改不动"（宿主改版）时出现，那时才真的打不回来。
 
 ## 几个值得单独记的条目
 
@@ -55,9 +74,11 @@
 2. 被剪掉的内容模型拿不回来，需要时只能重新读文件 / 重跑命令，等于多花一轮。
 3. 真正被剪的比例很低：宿主默认阈值 8,192 字符，而实测工具结果平均 1,218～2,234 字符/次。
 
-**想要「温和档」不必改补丁代码**：把宿主 `lib/index.js` 还原成同目录的 `.dshpurge.bak`，
-再把预设里 `tool-result-pruner` 的 `thresholdChars` 调到 32768（配置层，升级不冲突）。
-注意破甲**没有**「排除单条补丁」的开关，下一次 `--apply` 会按 marker 把它写回来。
+**想要「温和档」：把 #19 排掉 + 调阈值，宿主文件一个字节都不用碰。**
+1.3.8 起有排除开关（下一节）：`exclude-patches.json` 里排掉 `19`，再把预设里 `tool-result-pruner`
+的 `thresholdChars` 调到 32768（配置层，升级不冲突）。不要走"从 `.dshpurge.bak` 还原 `lib/index.js`
++ 手改预设"那条老路：下一次 `--apply` 会把 #19 重新贴回去（apply 走的是 replacement，不读 marker 回填），
+而还原错一个文件就丢掉别的补丁。
 
 
 ### 怎么"永久不贴"某条补丁
@@ -67,5 +88,10 @@
 { "excludePatches": [19] }
 ```
 
-`applyPatchesAllHosts` / `patchStatus` 会跳过这些 id（既不贴，也不在面板上显示成待贴）。
-1.3.8 起支持。典型用法就是 #19：想用温和剪枝就不能让 #19 把宿主的 `pruneContent()` 改回 `return null`。
+清单在 `lib/core.js:1918-1933` 读（`readExcludePatches` / `withoutExcluded`），生效点两处：
+
+- `applyPatchesAllHosts()`（`core.js:1936`）—— 四个应用入口全走它（`lib/index.js:1272 / 1345 / 1975 / 2337`），所以"到处生效"；
+- `patchStatus()`（`core.js:4221`）—— 被排掉的 id 不进状态表，面板既不贴也不显示成待贴。
+
+清单写坏了（不是合法 JSON、或字段不是数组）按"没排除"处理。1.3.8 起支持。
+典型用法就是 #19：想用温和剪枝，就不能让 #19 把宿主的 `pruneContent()` 改回 `return null`。

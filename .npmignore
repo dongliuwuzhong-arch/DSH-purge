@@ -4,3 +4,5 @@
 # 明文在包里不影响运行（运行时只读 asset-table.js 里的密封槽）。
 lib/default-prompt-inject.md
 频道推广手册/
+# docs/notice 下是第三方微信截图（零引用），只留在仓库，不进发布包。
+docs/notice/

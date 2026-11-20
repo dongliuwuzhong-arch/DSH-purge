@@ -1,21 +1,24 @@
 # dsh-purge 文档（中文）
 
-按"我要干什么"排的，不用按顺序读。
+按"我要干什么"排的，不用按顺序读。**第一次来先读第一篇**——日常维护、状态语义、备份回滚、升级换包、排障、改动纪律全收在里面，其余几篇是它的展开。
 
 | 想知道什么 | 看哪篇 |
 | --- | --- |
+| **这一篇就够：七条日常判据、六种状态怎么判、备份怎么救、换包顺序、10 条排障、改代码要跑什么** | **[00-运维手册](00-maintenance.md)** |
 | 怎么装、怎么从 rc.1 升到 rc.3、装完怎么验 | [01-安装与升级](01-install.md) |
 | 88 条补丁到底改了什么、哪些是可选 | [02-补丁表](02-patches.md) |
 | `.dshpurge.bak` 是什么、怎么回滚、1.3.3 改了什么 | [03-备份与回滚](03-backup-revert.md) |
 | 想自己验一遍：四个纯净版本各装一次的影子里怎么做的 | [04-影子测试](04-shadow-test.md) |
 | 哪些地方现在还是空的 / 打不上的 / 会误导人的 | [05-已知限制](05-known-limits.md) |
-| 历次审计与实现报告（A1–A8） | [06-审计报告](06-audits.md) |
+| 历次审计与实现报告（A1–A8 + 影子矩阵摘要） | [06-审计报告](06-audits.md) |
+| 官方发新版了要不要现在升：预检、退出码、换包顺序、回滚资产 | [07-升级手册](07-upgrade-playbook.md) |
 
 英文入口在仓库根的 [README.md](../../README.md)。
 
 ## 一眼版本
 
 - 补丁表 **88 条**，最大 id 105
-- 当前适配 **DSH 0.2.2-rc.3**（同时也吃 0.2.1-rc.3 / 0.2.2-rc.1 / rc.2）
-- 最近三版：1.3.1（#73 假绿 + #104 新增）、1.3.2（六条 rc.3 失配重打）、1.3.3（备份覆写 + #43 打坏 rc.2 预设）
-- 判据命令：`node scripts/assert-patches.mjs` / `node scripts/assert-soul-guard.mjs` / `node --test "test/*.test.mjs"`（126 条）
+- 当前适配 **DSH 0.2.2-rc.3**（同时也吃 0.2.1-rc.3 / 0.2.2-rc.1 / rc.2）；rc.5 已做过预检与链式干跑，未装机实跑
+- 当前插件版 **1.4.0**（六路审计后的修复 + rc.5 适配 + 升级护栏），测试 **194 例**
+- 判据命令：`node scripts/assert-patches.mjs` / `node scripts/assert-soul-guard.mjs` / `node --test "test/*.test.mjs"` / `node scripts/preflight-upgrade.mjs --host <树>`
+- 本机运维脚本（不在本仓库，随工作区走）：`check-paths.mjs` / `check-pruner.mjs`

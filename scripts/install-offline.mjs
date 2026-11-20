@@ -7,12 +7,23 @@
  * package into the profile's node_modules as a junction/symlink.
  *
  * This script does not apply patches and does not restart DSH.
+ *
+ * 沙箱护栏（2026-11-16，S4 指出的唯一能毁现网的开关）：
+ *   不给 --desktop-install 时它会自己探测桌面安装目录，而探测结果往往是**现网正在用的那份**
+ *   （实测 %INSTALL_DIR%），写进 <DSH_HOME>/dsh-purge/desktop-install.txt 之后
+ *   core.js 会把那份安装当成"本插件认领的"并去改它。所以：
+ *     · 探测到的目录 == 现网（或互相包含）→ 拒绝，打印该目录；
+ *     · 现网目录解析不出来（unresolved）→ 拒绝；
+ *     · 例外：本次 DSH_HOME 就是现网 DSH_HOME 时照常装（那不是沙箱，就是给现网装插件）；
+ *     · 要装在别处：--desktop-install <目录>；确实要认领现网：--allow-live。
+ *   退出码：0 = 成功/无需处理；1 = 失败或被护栏拒绝。
  */
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import * as desktop from "../lib/desktop.js";
 
 const ROOT = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 const args = process.argv.slice(2);
@@ -179,6 +190,103 @@ async function detectDesktopInstall() {
   }
 }
 
+/** 归一化目录：末尾斜杠去掉、统一正斜杠；比较时再转小写。 */
+export function normalizeDir(dir) {
+  const n = path.normalize(String(dir || "").trim()).replace(/\\/g, "/").replace(/\/+$/, "");
+  return n === "." ? "" : n;
+}
+
+/** 同一个安装树：相等、或一方在另一方里面（盘符根不算）。 */
+export function sameOrNested(a, b) {
+  const x = normalizeDir(a).toLowerCase();
+  const y = normalizeDir(b).toLowerCase();
+  if (!x || !y) return false;
+  if (/^[a-z]:$/.test(x) || /^[a-z]:$/.test(y)) return false;
+  return x === y || x.startsWith(y + "/") || y.startsWith(x + "/");
+}
+
+/** 现网（真的在用的那份）安装目录。只看"装在哪"的硬证据，不主动 discover 进程/快捷方式：
+ *  DSH_DESKTOP_INSTALL、本机 dsh-home 里记过的 desktop-install.txt、当前进程就是宿主 exe、
+ *  注册表登记的安装目录。 */
+export function liveDesktopDirs({ env = process.env, dshHome = "", execPath = process.execPath } = {}) {
+  const out = [];
+  const push = (dir) => {
+    const n = normalizeDir(dir);
+    if (n && !out.some((x) => x.toLowerCase() === n.toLowerCase())) out.push(n);
+  };
+  for (const item of String(env.DSH_DESKTOP_INSTALL || "").split(path.delimiter)) push(item);
+  if (dshHome) {
+    try {
+      const fp = path.join(dshHome, "dsh-purge", "desktop-install.txt");
+      const line = fs.readFileSync(fp, "utf8").split(/\r?\n/).map((s) => s.trim()).find(Boolean);
+      if (line) push(line);
+    } catch {
+      // 没记过就是没有
+    }
+  }
+  try {
+    if (desktop.isOfficialHarnessExecutable(execPath)) push(path.dirname(path.normalize(execPath)));
+  } catch {
+    // 非致命
+  }
+  try {
+    for (const dir of desktop.registryInstallDirs()) push(dir);
+  } catch {
+    // 注册表读不到就当没有（会走 resolved/unresolved 判定）
+  }
+  return out;
+}
+
+/** 现网 DSH_HOME 的候选：环境里那份 + 默认 ~/.dsh。 */
+export function liveDshHomes({ env = process.env } = {}) {
+  const out = [];
+  const push = (dir) => {
+    const n = normalizeDir(dir);
+    if (n && !out.some((x) => x.toLowerCase() === n.toLowerCase())) out.push(n);
+  };
+  push(env.DSH_HOME);
+  push(path.join(os.homedir(), ".dsh"));
+  return out;
+}
+
+/**
+ * 沙箱护栏（S4：不传 --desktop-install 时 installer 会自动认领现网 exe）。
+ * 判定顺序：
+ *  1. 显式 --desktop-install → 放行（用户点名的那份）；
+ *  2. --allow-live → 放行（明确要认领现网）；
+ *  3. 本次 DSH_HOME 就是现网 DSH_HOME → 放行（给现网装插件，认领是对的）；
+ *  4. 什么都没探测到 → 放行（不会写 desktop-install.txt）；
+ *  5. 现网目录一个都解析不出来（unresolved）→ 拒绝；
+ *  6. 探测到的目录落在现网里 → 拒绝。
+ */
+export function desktopInstallGuard({ detected = "", liveDirs = [], liveHomes = [], dshHome = "", explicit = "", allowLive = false } = {}) {
+  if (explicit) return { ok: true, use: explicit, reason: "explicit", liveDir: "" };
+  if (allowLive) return { ok: true, use: detected, reason: "allow-live", liveDir: "" };
+  const hit = detected ? liveDirs.find((dir) => sameOrNested(detected, dir)) || "" : "";
+  const liveHome = liveHomes.some((home) => sameOrNested(dshHome, home));
+  if (detected && liveHome) return { ok: true, use: detected, reason: "live-home", liveDir: hit };
+  if (!detected) return { ok: true, use: "", reason: "no-install", liveDir: "" };
+  if (!liveDirs.length) return { ok: false, use: "", reason: "unresolved", liveDir: "" };
+  if (hit) return { ok: false, use: "", reason: "live", liveDir: hit };
+  return { ok: true, use: detected, reason: "other", liveDir: "" };
+}
+
+/** 被护栏拒绝时打印的几行（把目录原样打出来，别让人猜）。 */
+export function guardRefusalLines({ detected = "", reason = "", liveDir = "", dshHome = "", stateFile = "" } = {}) {
+  const why = reason === "unresolved"
+    ? "现网安装目录解析不出来（没有注册表登记，也没有 desktop-install.txt）"
+    : "自动探测到的桌面安装目录就是现网（正在用的那份）";
+  const lines = [];
+  lines.push("拒绝：" + why + "。");
+  lines.push("  探测到的目录: " + (detected || "(空)"));
+  if (liveDir) lines.push("  现网目录:     " + liveDir);
+  lines.push("  目标 DSH_HOME: " + (dshHome || "(未指定)") + "（不是现网的 DSH_HOME）");
+  if (stateFile) lines.push("  会写进: " + stateFile);
+  lines.push("  core.js 会把这条记成\"本插件认领的安装\"，认错了就会去改现网那份。");
+  lines.push("装在沙箱里：加 --desktop-install <那份安装的目录>；确实要认领现网：加 --allow-live。");
+  return lines;
+}
+
 async function verify(profileDir, pluginDir) {
   const packageFile = path.join(profileDir, "package.json");
   const pkg = readJson(packageFile);
@@ -205,7 +313,24 @@ async function verify(profileDir, pluginDir) {
   return pluginPkg.version;
 }
 
+const HELP_TEXT = [
+  "用法: node scripts/install-offline.mjs [--dsh-home <dir>] [--profile <name>] [--source <dir>|--zip <zip>]",
+  "       [--desktop-install <dir>] [--allow-live] [--dry-run] [--force] [--verify] [--uninstall [--purge]]",
+  "",
+  "--desktop-install <dir>  记下这次要认领的桌面安装目录（不传则自动探测，探测结果可能是现网）",
+  "--allow-live             明确允许认领现网那份安装（护栏默认拒绝）",
+  "--dry-run                只打印，不落盘",
+  "--verify / --uninstall   校验 / 卸载（--uninstall 可加 --purge 连插件目录一起删）",
+  "",
+  "沙箱护栏：自动探测到的目录若等于现网（或现网目录解析不出来），而目标 DSH_HOME 又不是现网的，",
+  "一律拒绝并打印该目录；退出码 1。这是为了防止沙箱安装把现网 exe 写进 desktop-install.txt。",
+].join("\n");
+
 async function main() {
+  if (args.includes("--help") || args.includes("-h")) {
+    console.log(HELP_TEXT);
+    return;
+  }
   const mode = flags.has("--verify") ? "verify" : flags.has("--uninstall") ? "uninstall" : "install";
   const dryRun = flags.has("--dry-run");
   const force = flags.has("--force");
@@ -256,7 +381,32 @@ async function main() {
 
     const sourcePkg = readJson(path.join(source, "package.json"));
     const { packageFile, pkg, changed } = ensureProfile(profileDir);
-    const desktopInstall = arg("--desktop-install") || await detectDesktopInstall();
+    const explicitDesktop = normalizeDir(arg("--desktop-install"));
+    let desktopInstall = explicitDesktop;
+    if (!explicitDesktop) {
+      // 自动探测会捞到"现网正在用的那份"（S4 实测返回 %INSTALL_DIR%\DeepSeek Harness.exe），
+      // 写进 desktop-install.txt 之后 core.js 会去改它 —— 所以探测结果必须先过护栏。
+      const detected = normalizeDir(await detectDesktopInstall());
+      const verdict = desktopInstallGuard({
+        detected,
+        liveDirs: liveDesktopDirs({ dshHome }),
+        liveHomes: liveDshHomes(),
+        dshHome,
+        allowLive: flags.has("--allow-live"),
+      });
+      if (!verdict.ok) {
+        for (const line of guardRefusalLines({
+          detected,
+          reason: verdict.reason,
+          liveDir: verdict.liveDir,
+          dshHome,
+          stateFile: path.join(dshHome, "dsh-purge", "desktop-install.txt").replace(/\\/g, "/"),
+        })) console.error("[dsh-purge-install] " + line);
+        process.exitCode = 1;
+        return;
+      }
+      desktopInstall = verdict.use;
+    }
 
     if (dryRun) {
       console.log(`[dry-run] source: ${source}`);
@@ -291,6 +441,9 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  fail(error && error.stack ? error.stack : String(error));
-});
+// 只有直接运行时才装：被 import（测试）时不该动任何人的 DSH_HOME。
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+  main().catch((error) => {
+    fail(error && error.stack ? error.stack : String(error));
+  });
+}

@@ -1,23 +1,23 @@
 # dsh-purge
 
-**DSH 0.2.2-rc.3 兼容变体 · 1.3.3**
+**DSH 0.2.2-rc.3 兼容变体 · 1.3.8**
 
 > 📚 **中文文档在 [docs/zh/README.md](docs/zh/README.md)**：安装与升级、补丁表全表、备份与回滚语义、影子测试方法、已知限制、审计报告（A1–A8）。
 
 - 上游：[YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge)
 - 本仓库：[dongliuwuzhong-arch/DSH-purge](https://github.com/dongliuwuzhong-arch/DSH-purge)
 - 实测版本：0.2.1-rc.3 · 0.2.2-rc.1 · 0.2.2-rc.2 · 0.2.2-rc.3（影子安装，四棵出厂树）
-- 补丁表 **88 条**，测试 126 条
+- 补丁表 **88 条定义**（可按排除清单屏蔽），测试 **136 条**
 
-## 当前状态（1.3.3）
+## 当前状态（1.3.8）
 
 | 项 | 值 |
 | --- | --- |
-| 补丁表 | 87 条，最大 id 105 |
-| 测试 | 126 pass / 0 fail |
+| 补丁表 | 88 条定义，最大 id 105 |
+| 测试 | 136 pass / 0 fail |
 | 实测宿主 | 0.2.2-rc.3（外壳 / 主程序 / 底座三层一致） |
 | 实测坐标系 | 0.2.1-rc.3 · 0.2.2-rc.1 · 0.2.2-rc.2 · 0.2.2-rc.3 四棵出厂树 |
-| 最近三版 | 1.3.1 #73 假绿 / #104 新增 · 1.3.2 六条失配重打 · 1.3.3 备份覆写 / #43 打坏 rc.2 预设 |
+| 最近三版 | 1.3.6 桌面换包三处缺陷 · 1.3.7 升级前预检 + 升级手册 · 1.3.8 `exclude-patches.json` 永久排除某条补丁 |
 
 三条会真坏事的教训，写在这儿免得翻 CHANGELOG：
 
@@ -65,7 +65,7 @@
 
 ### 补丁
 
-- 补丁表当前为 **88 条定义**；实际状态按当前宿主面匹配，分成已应用、待应用、跳过。
+- 补丁表当前为 **88 条定义**（可用 `exclude-patches.json` 永久屏蔽某条，屏蔽后既不打也不显示）；实际状态按当前宿主面匹配，分成已应用、待应用、跳过。
 - 应用前把目标文件备份为 `<文件>.dshpurge.bak`，重复应用是幂等的。
 - 「还原」用备份覆盖回去并删除备份；没有备份时，至少剥掉本插件写入 shim 的行。
 - 「卸载」会先还原已应用的补丁，再删除注入文件、规则库和插件本身。
@@ -136,7 +136,7 @@ node scripts/install-offline.mjs --verify --profile desktop --dsh-home "$HOME/.d
 也可以直接安装压缩包：
 
 ```sh
-node scripts/install-offline.mjs --zip dsh-purge-1.2.7.zip --profile desktop --dsh-home "$HOME/.dsh"
+node scripts/install-offline.mjs --zip dsh-purge-1.3.8.zip --profile desktop --dsh-home "$HOME/.dsh"
 ```
 
 安装器会校验包、复制到 `$DSH_HOME/plugins/dsh-purge`、修改 profile 的 `package.json`、建立 `node_modules/dsh-purge` 链接，并写入 `desktop-install.txt`。默认**不执行 pnpm、不 Apply、不重启**。

@@ -10,33 +10,83 @@
 node scripts/preflight-upgrade.mjs --host "<解包出来的 resources\app>"
 ```
 
-它只读，输出四类结果：
+它只读，按六个桶分（`scripts/preflight-upgrade.mjs:145`）；`skipped` 里再按 `optional` 分成两种读法：
 
-| 结果 | 含义 | 要不要管 |
+| 桶 | 含义 | 要不要管 |
 | --- | --- | --- |
 | applied | 已贴上（或新版本自带了标记） | — |
-| 待贴 | 模式对得上，装的时候会打上 | 不用管，这是刚解包的正常状态 |
-| **模式不匹配** | 官方改了这段，补丁贴不上去 | **要重锚** |
-| na | 这棵树里没有对应文件（可选包） | 不用管 |
+| pending（待贴） | 模式对得上，装的时候会打上 | 不用管，刚解包就该是这样 |
+| skipped · optional | 可选补丁，这棵树没装对应的包 | 不用管 |
+| **skipped · 非 optional** | **官方改了这段，补丁贴不上去** | **要重锚** |
+| na | 这棵树里不适用（宿主面 / 文件不存在） | 不用管 |
+| missing | 目标文件根本不在这棵树里（第三方预设包缺席等） | 默认只提示；要它参与判定加 `--strict-missing` |
+| excluded（已排除） | 被 `exclude-patches.json` 排掉了 | 正常 |
 
-退出码：`0` 全对得上、可以换包；`2` 有模式不匹配，先重锚。
+退出码：
+
+| 码 | 什么时候 |
+| --- | --- |
+| `0` | 没有"非可选 + 模式不匹配"、也没有相对基线的漂移（没加 `--strict-missing` 时 `missing` 不算） |
+| `2` | 有非可选补丁失配；`--strict-missing` 把 `missing` 也算进来；有基线时只算**相对基线**的漂移 |
+| `1` | 用法 / 环境错误（`--host` / `--ai` 指不到 `@deepseek-ai`） |
+
+**没有基线也能退 0**：一台装好的机器上现在有 4 条跳过（#56 #77 #80 #88），它们都是 `optional`，不计入失配。
+反过来说，看到 `2` 就是真有非可选补丁贴不上——这时才需要重锚。
 
 ### 差分才是真信号
 
-已知良好树上本来就有几条"跳过"（可选/布局软补丁）。第一次在**已贴满**的安装上存一份基线：
+已知良好树上本来就有几条跳过。要分清"本来就跳"和"新版本弄坏了"，得先存基线，**分两次跑**：
 
 ```bash
+# 第一次：在当前那棵已贴满的树上存基线（只写文件，不打印计数和差分）
 node scripts/preflight-upgrade.mjs --host "<当前安装的 resources\app>" --save-baseline
+# → 已记录基线 → <仓库>/scripts/preflight-baseline.json
+
+# 第二次：对候选版本跑，这时才看得见差分
+node scripts/preflight-upgrade.mjs --host "<新版本解包出来的 resources\app>"
 ```
 
-之后对候选版本跑，它会多打一行：
+第二次会多出基线那几行；没漂移时是这样：
 
-```
-基线: …（applied 75 / skipped 4）
-⚠ 比基线多出来的"跳过"（这些才是新版本弄坏的）: #46 #83 #84 #91
+```text
+基线: dsh-desktop-runtime@0.2.2-rc.3（applied 74 / skipped 4）
+相对基线无漂移。
 ```
 
-**只有这一行非空才是真要动手。** 绝对数字会骗人：一台机器上 4 条跳过是常态。
+一旦新版本弄坏了东西，就变成：
+
+```text
+⚠ 相对基线漂移（基线里贴得上、这棵树贴不上）: #70 #91
+```
+
+**只有漂移那行非空才是真要动手。** 绝对数字会骗人：一台机器上 4 条跳过是常态。
+`--save-baseline` 那一趟只写 `scripts/preflight-baseline.json` 然后立刻 `return 0`（`preflight-upgrade.mjs:181-191`），
+不打印计数也不打印差分；上面那两行只在"已有基线 + 本次没传 `--save-baseline`"时出现。
+
+### 一棵已打满的树上跑一遍长什么样（真实输出）
+
+```text
+预检目标: <安装目录>\resources\app\dsh\node_modules\@deepseek-ai
+宿主版本: @deepseek-ai/dsh-desktop@0.2.2-rc.3  /  @deepseek-ai/dsh-desktop-runtime@0.2.2-rc.3
+破甲基准: 0.2.2-rc.3  ✓ 一致
+
+补丁 88 条：applied 74 / 待贴 0 / 可选跳过 4 / ⚠模式不匹配 0 / na 9 / 已排除 1
+
+桌面壳（独立核查 <安装目录>\resources\app\lib\main.js）：applied 6 / 待贴 0 / 模式不匹配 0
+
+这棵树里不适用（文件不存在）：#76 #28 #30 #31 #47 #49 #57 #64 #65
+
+基线: @deepseek-ai/dsh-desktop-runtime@0.2.2-rc.3（applied 75 / skipped 4）
+相对基线无漂移。
+
+结论：模式全对得上，可以换包。
+```
+
+### 排除清单的副作用
+
+被 `exclude-patches.json` 排掉的 id 不进 `patchStatus`。预检自己读同一份清单、单独归进 `excluded` 桶
+（`preflight-upgrade.mjs:143-150`），所以它不冒充 `missing`、也不参与退出码。
+旧版脚本和旧面板没有这段逻辑，会把被排掉的 id 显示成"缺文件"或"待贴"——那是**预期**，别去追一个不存在的原件。
 
 ### 桌面壳单独核
 
@@ -52,12 +102,13 @@ node scripts/preflight-upgrade.mjs --host "<当前安装的 resources\app>" --sa
 
 1. **别自己写换包脚本。** 破甲自己有换包逻辑；两套抢活就是 2026-11-16 那场事故。
 2. 主机正常退出后再动文件（`EBUSY` 都是没退干净）。
-3. 换完先跑 `node tools/check-paths.mjs`，**第一条是"宿主读的是哪棵树"**：
+3. 换完先跑 `node tools/check-paths.mjs`（不在本仓库：工作区 `tools\` 下的运维脚本），**第一条是"宿主读的是哪棵树"**：
    读 `resources\app` 才对，读 `app.asar` 说明补丁全在空转。
 4. 再跑 `patchStatus`（面板或 `--status`）。"缺文件"不等于没贴上，
-   `targetFiles(aiBase)` 只覆盖 52 个键，壳和 hooks 那几类解析不到；判断以文件里的 markers 为准。
+   `targetFiles(aiBase)` 只覆盖 57 个键（实测），壳和 hooks 那几类解析不到；判断以文件里的 markers 为准。
+   另外：被 `exclude-patches.json` 排掉的补丁在旧面板里会显示成缺文件，那是预期（见上一节）。
 5. 人格验证：让一个新会话说句话，确认注入了 1 份、没被截断
-   （`node 专项任务\破甲\bin\count-injections.mjs 5`）。
+   （`node 专项任务\破甲\bin\count-injections.mjs 5`——不在本仓库：工作区脚本，参数是"最近场数"）。
 
 ## 三、回滚资产（换包前留好）
 

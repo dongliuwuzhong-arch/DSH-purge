@@ -3,6 +3,42 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 / rc.3 兼容变体**。
 上游以 MIT 发布，仍在维护（发版到 1.1.81，`dshTarget: 0.2.0-rc.2`）；本分支跟的是 0.2.1-rc.3。
 
+## 1.4.0 · 2026-11-16 · 六路审计后的修复 + rc.5 适配 + 升级护栏
+
+起因：宿主 0.2.2-rc.5 要来了，全面审计 88 条补丁与破甲自身。审计分六路（代码语义 / 配置 / 文档 / 测试 / rc.5 适配 / rc.3→rc.5 差分），修复分四路。
+补丁表仍 88 条；测试 136 → 194。
+
+### 严重（换包会毁宿主）
+
+1. `revertAll` 不校验备份大小：0 字节或被截断的 `.dshpurge.bak` 会被 `copyFile` 直接盖到宿主文件上。
+   现在新桶 `emptyBak` / `staleBak`，一律不覆盖；`backupAll` 把 0 字节 bak 视为不存在并重建。
+2. "先刷新过期 bak 再 revert"是死代码：`refreshStaleBaksForUpgrade` 默认 `apply:false` 一个字节都不写，
+   调用方却当它刷过。现在把路径集传给 `revertAll({skipPaths})`，日志改口径。
+3. `install-offline` 不给 `--desktop-install` 时会探测到**现网安装目录**并往那里装。
+   现在有 `desktopInstallGuard`：探测结果等于现网就拒绝，除非显式 `--desktop-install` 或 `--allow-live`。
+
+### 判定正确性
+
+4. `targetLooksPatched` 只认 `replacements` 形态，legacy `patterns/replace` 全跳过，且自包含替换会被判"干净" → 统一判据。
+5. marker 与补丁体字面不一致的 4 组（#36 / #73×2 / #100）现在用大小写宽松匹配 + 产物在场兜底（#36/#100 由 skipped 转 applied）。
+6. 反向假绿（marker 取自上游原句，#2 #3 #24 #50）加 `markerLooksUpstream`：带 `dsh-purge` 字样的 marker 才计票。
+7. `exclude` 收口到 `effectivePatchIds()`：页面加载写 client bundle、`hookDenyPaths`、`annotateHookDenyStatus`、`gatherState` 分母全部遵守，
+   面板不再出现"已排除但仍待应用"的幽灵行。
+
+### rc.5 适配
+
+8. `#80` 整块重写：旧锚点指向破甲自己写过的 minimal 中间态（从未存在）；改锚官方 `minimal.patch.yml` 的 tool-fs 块 + `dsh-sdk-minimal` 对应块。
+9. `#88` 标 `optional`（#87 已直接出终态）；`#46` 第 1 个 replacement 注明只对 rc.3 老安装器有效；`#56/#77` 注明两版都贴不上（空操作）；
+   `#62` 补风险说明：上游 rc.3 与 rc.5 该文件**逐字节相同**，破甲的 fail-open 是既有行为，不是 rc.5 引入。
+
+### 预检与文档
+
+10. `preflight-upgrade.mjs`：五个桶全打并核对合计 88；排除项不再算 missing；退出码契约三处统一（无基线只看非可选失配，有基线只看漂移）；--json 修 TDZ。
+11. 文档全量校正：87→88、126→136、1.3.3→1.4.0、02 的判定顺序与终态表、03 的 backupGap 四类与 revert 八桶、05 的 missing_file 口径、
+    07 的退出码/基线/五桶/排除副作用；`files` 白名单补 `soul-guard.lock` / `release-notes.md` / `SOUL-GUARD.md`；
+    删掉 11-06 的 `test/test/` 陈旧副本（含真路径）；`docs/notice` 三个 jpg 不再随包发布。
+12. 新增 `docs/zh/00-maintenance.md`（运维手册，本轮重写）。
+
 ## 1.3.8 · 2026-11-16 · 永久排除某条补丁（exclude-patches.json）
 
 补丁表仍 88 条，测试 133 → 136。

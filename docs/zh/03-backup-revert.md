@@ -12,14 +12,34 @@
 
 ## 回滚
 
-`revertAll(aiBase)` 把 bak 覆盖回去，然后删掉 bak。判据是 `sameFileBytes`：
-bak 与现文件字节相同就跳过——不过这时要看它落在哪个桶里：
+`revertAll(aiBase, options)`（`lib/core.js:3134-3197`）把 bak 覆盖回去再删掉 bak，一共返回 10 个桶：
 
-- **`skipped`**：文件确实没被动过
-- **`unrevertable`**：bak == 现文件，**而这个文件还带着补丁痕迹** → 这份"备份"是假的，回滚不掉，必须单独报出来
+| 桶 | 什么时候 | 怎么读 |
+| --- | --- | --- |
+| `reverted` | bak 覆盖回去了 | 正常回滚 |
+| `skipped` | bak == 现文件、且文件没有补丁痕迹；或启动自愈里被保留的前端 `client.js`（`preserveClientBundles`） | 本来就不该动 |
+| `noop` | bak == 现文件、有痕迹，但这条补丁对这个文件本来是空操作（`core.js:3179`） | **正常**，不是故障 |
+| `unrevertable` | bak == 现文件、有痕迹、补丁确实改过它（`core.js:3180`） | **故障**：这份"备份"是假的，回滚不掉 |
+| `noBackup` | 没有 bak，文件还在、还带着补丁（`core.js:3194`） | 有补丁没原件，不会混进 `skipped` |
+| `preservedUser` | 用户 patch 层（`~/.dsh/profiles/*/cordis.patch.yml`）：只丢 bak，绝不覆盖回去（#43） | 正常 |
+| `dropped` | 清掉的过期用户层 bak | 正常 |
+| `errors` | 拷贝 / 删除抛错 | 逐条看 |
 
-`backupGap()` 对应三类：`missing`（压根没 bak）、`suspect`（bak == 现文件又不算空操作）、
-`noop`（补丁本来就是空操作，bak == 现网属正常）。
+`skipped` / `noop` / `unrevertable` 三个都用 `sameFileBytes()` 判"bak 与现文件是不是同一份"，
+差别只在"有没有补丁痕迹"和"这条补丁是不是空操作"。**把 `noop` 和 `unrevertable` 当成一回事就会误判**：
+前者是正常，后者是原件已经没了。
+
+`backupGap(aiBase)` 是另一条线（`core.js:3089-3123`），**四类**：
+
+| 类 | 含义 |
+| --- | --- |
+| `missing` | 压根没有 bak |
+| `patched` | 没有 bak，但文件已经带着补丁痕迹、而且这条补丁对它不是空操作（`core.js:3114`）→ **原件要另外找回** |
+| `suspect` | bak 在、bak == 现文件、有痕迹且非空操作 → 这份"备份"是假的 |
+| `noop` | bak == 现文件，但补丁对它本来是空操作 → 正常 |
+
+四类里 `patched` 最容易漏：它只出现在"没有 bak"的那批文件里，面板上也不是单独一行，
+而是 `missing` 列表里后缀"（已带补丁痕迹：原件要另外找回）"的那几条（`lib/index.js:167`）。
 
 ## 1.3.3 修的 P0：假备份是怎么来的
 
@@ -48,9 +68,13 @@ revertAll   → restored=0，文件仍是 40014
 ## 自查
 
 ```bash
-# 必须显式给 aiBase，不带参直接 exit 2
+# 带参最稳；不带参时脚本先取 DSH_PURGE_AI_BASE，再退 findAiBase()，两样都拿不到才 exit 2
 node scripts/check-bak-judge.mjs <安装目录>/resources/app/dsh/node_modules/@deepseek-ai
 ```
 
-面板里看三行：`备份 / backup: 有`、`空操作备份 / no-op bak: N 个`（正常）、
-`备份缺口 / backup gap`（missing / suspect，这两类要处理）。
+面板里看四行（`lib/index.js:162-182`）：
+
+- `备份 / backup`：至少有一份 bak；
+- `备份缺口 / backup gap`：`missing` 的条数，列表里每行可能带后缀"（已带补丁痕迹：原件要另外找回）"——带后缀的是 `patched`；
+- `可疑备份 / suspect bak`：bak 和现文件一模一样、而文件确实被打过 → 这份备份是假的；
+- `空操作备份 / no-op bak`：正常，不用管。

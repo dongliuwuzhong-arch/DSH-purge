@@ -42,7 +42,7 @@ bak 有没有被动过、revert 后是否逐字节回原件、预设有没有被
 0.2.2-rc.3    ✓    ✓      ✓         ✓            无
 ```
 
-87 条 × 4 版 = 348 格判定，**85 条四版完全一致**。只有两条不同：
+87 条（**当时**的表长，现在是 88）× 4 版 = 348 格判定，**85 条四版完全一致**。只有两条不同：
 
 - `#40 COMPLETE_PROMPT_KEEP_INJECT`：0.2.1-rc.3 判 skipped（那版 return 里还没有 `tools` 字段）
 - `#56 REWIND_HIDE_CUT_ONLY`：rc.2/rc.3 判 skipped（`client.js` 压缩成 27 行，pattern 失配）
