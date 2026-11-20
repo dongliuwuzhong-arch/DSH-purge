@@ -58,3 +58,14 @@
 **想要「温和档」不必改补丁代码**：把宿主 `lib/index.js` 还原成同目录的 `.dshpurge.bak`，
 再把预设里 `tool-result-pruner` 的 `thresholdChars` 调到 32768（配置层，升级不冲突）。
 注意破甲**没有**「排除单条补丁」的开关，下一次 `--apply` 会按 marker 把它写回来。
+
+
+### 怎么"永久不贴"某条补丁
+
+```json
+// <DSH_HOME>/dsh-purge/exclude-patches.json
+{ "excludePatches": [19] }
+```
+
+`applyPatchesAllHosts` / `patchStatus` 会跳过这些 id（既不贴，也不在面板上显示成待贴）。
+1.3.8 起支持。典型用法就是 #19：想用温和剪枝就不能让 #19 把宿主的 `pruneContent()` 改回 `return null`。

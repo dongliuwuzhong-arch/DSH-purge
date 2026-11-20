@@ -3,6 +3,32 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 / rc.3 兼容变体**。
 上游以 MIT 发布，仍在维护（发版到 1.1.81，`dshTarget: 0.2.0-rc.2`）；本分支跟的是 0.2.1-rc.3。
 
+## 1.3.8 · 2026-11-16 · 永久排除某条补丁（exclude-patches.json）
+
+补丁表仍 88 条，测试 133 → 136。
+
+### 新增：用户级排除清单
+
+以前想"永久不贴某条补丁"只能去 `lib/patches.js` 删条目——一删就跟上游分叉。
+现在读一个文件：
+
+```json
+// <DSH_HOME>/dsh-purge/exclude-patches.json
+{ "excludePatches": [19] }
+```
+
+`applyPatchesAllHosts` 和 `patchStatus` 都会过滤掉这些 id：既不贴，也不在面板上显示成"待贴"。
+清单坏了（JSON 解析失败）按"没排除"处理——不能因为一个坏文件少贴别的补丁。
+
+### 为什么现在需要它：#19 与温和剪枝二选一
+
+`#19 TOOL_RESULT_PRUNER_DISABLED` 把 `pruneContent()` 改成直接 `return null`，
+而温和剪枝（`thresholdChars: 32768`）要求宿主保持原始实现。两者不能共存：
+
+- 要剪枝 → 排除 #19，宿主保持原件（本机现在的选择）
+- 不要剪枝 → 别排除，同时把预设里的 `tool-result-pruner` 子行撤掉，别留死配置
+
+留着一半的配置只会让自检长期报红，变成噪音。
 ## 1.3.7 · 2026-11-16 · 升级前预检 + 升级手册
 
 补丁表仍 88 条，测试 130 → 133。

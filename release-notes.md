@@ -1,11 +1,16 @@
-# 1.3.7
+# 1.3.8
 
-升级前预检 + 升级手册。
+新增「永久排除某条补丁」：
 
-- 新增 `scripts/preflight-upgrade.mjs`：对着一棵候选宿主树只读地报告 applied/待贴/模式不匹配/na，
-  支持 `--save-baseline` 存基线后看差分（只有"比基线多跳过的"才是新版本弄坏的）。
-  桌面壳补丁单独核查，不再恒报 na。
-- 新增 `docs/zh/07-upgrade-playbook.md`。
-- 顺手发现并修好：本机 `dsh-compaction-tool-result-pruner` 的 #19 掉了（文件是原件）。
+```json
+// <DSH_HOME>/dsh-purge/exclude-patches.json
+{ "excludePatches": [19] }
+```
 
-补丁表 88 条不变；测试 130 → 133。
+`applyPatchesAllHosts` / `patchStatus` 都会过滤这些 id——既不贴，也不显示成待贴。
+清单写坏了按"没排除"处理。
+
+起因：#19（把剪枝改成 `return null`）和温和剪枝（`thresholdChars: 32768`）不能共存。
+以前只能删补丁表条目，一删就跟上游分叉；现在用清单文件表达。
+
+补丁表 88 条不变；测试 133 → 136。
