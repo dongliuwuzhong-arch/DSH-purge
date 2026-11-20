@@ -3,6 +3,34 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 / rc.3 兼容变体**。
 上游以 MIT 发布，仍在维护（发版到 1.1.81，`dshTarget: 0.2.0-rc.2`）；本分支跟的是 0.2.1-rc.3。
 
+## 1.3.7 · 2026-11-16 · 升级前预检 + 升级手册
+
+补丁表仍 88 条，测试 130 → 133。
+
+### 新增 `scripts/preflight-upgrade.mjs`
+
+拿一棵**候选宿主树**（新版本解包后的 `resources\app`）只读地告诉你会发生什么：
+
+```bash
+node scripts/preflight-upgrade.mjs --host "<新版本解包目录>"
+node scripts/preflight-upgrade.mjs --host "<当前安装>" --save-baseline   # 存基线
+```
+
+- 四类结果：applied / **待贴**（模式对得上，装的时候会打上）/ **模式不匹配**（要重锚）/ na。
+- 退出码：0 = 可以换包，2 = 有模式不匹配。
+- **差分**才是真信号：已知良好树上本来就有几条"跳过"，所以先 `--save-baseline`，
+  之后只看"比基线多跳过了哪些"。
+- 桌面壳补丁（`file: ["desktop-shell"]`）在纯 node 里恒报 na（`officialShellMain()`
+  要求 `detectSurface()==="desktop"`），预检改成直接读候选树里的 `lib\main.js` 自己判。
+
+### 新增 `docs/zh/07-upgrade-playbook.md`
+
+升级顺序、预检怎么读、回滚资产、以及那条已知的"升级窗口期必弹一次"的原因。
+
+### 顺手修掉的一处实际偏差
+
+本机 `dsh-compaction-tool-result-pruner/lib/index.js` 被发现是**未打补丁的原件**（#19 掉了），
+已重新贴上。预检正是用来提前发现这类"补丁静默落空"的。
 ## 1.3.6 · 2026-11-16 · 桌面换包三处缺陷
 
 来自宿舍机升级 rc.3 的复盘（三处都在，逐条核过代码）。补丁表仍是 88 条，测试 127 → 130。
