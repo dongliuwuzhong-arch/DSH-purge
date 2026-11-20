@@ -95,6 +95,7 @@ async function main() {
     const { hosts, report, backupRefused = [], backupErrors = [] } = await core.applyPatchesAllHosts(core.ALL_PATCHES, {
       preserveClientBundles: false,
       forApply: true,
+      allHosts: true,
     });
     for (const h of hosts) console.log(`  宿主 / host → ${h.aiBase}`);
     for (const r of report) {
@@ -132,7 +133,7 @@ async function main() {
     console.log("全部完成 / All done。重启 dsh 生效 / Restart dsh to take effect.");
   } else if (mode === "--revert") {
     if (state.ai_base || core.enumeratePatchAiBases().length) {
-      const { reverted, noBackup = [], unrevertable = [], noop = [], errors } = await core.revertAllHosts();
+      const { reverted, noBackup = [], unrevertable = [], noop = [], errors } = await core.revertAllHosts({ allHosts: true });
       for (const p of reverted) console.log(`  ✓ 已还原 / Reverted ${p}`);
       for (const [p, e] of errors) console.log(`  ⚠ 还原失败 ${p}: ${e}`);
       if (noBackup.length) {

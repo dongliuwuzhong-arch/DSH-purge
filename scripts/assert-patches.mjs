@@ -46,4 +46,30 @@ if (declared === null) {
 } else if (declared !== patches.length) {
   fail("CHANGELOG 写的是 " + declared + " 条，实际 " + patches.length + " 条 —— 改表之后忘了改文档，或反过来");
 }
+// markersWritten 的声明自检（2026-11-16 D1，影子报告 §5.3 的 4 条"部分落地还报绿"）：
+// markers 是认得的全部证据，里面混着旧编号别名、手打标记、上游原句、只对旧宿主有效的
+// 分支标记——拿它当"应该全部命中"的清单，那几条就永久报没落地。
+// 这里钉住另一半：声明"我会写出这几条标记"的，必须真的能在自己的 replacement 里找到，
+// 而且必须是 markers 的子集。写不出来的标记不许出现在 markersWritten 里。
+const withWritten = patches.filter((p) => Array.isArray(p.markersWritten) && p.markersWritten.length > 0);
+const writtenRecs = [];
+for (const p of withWritten) {
+  const texts = (Array.isArray(p.replacements)
+    ? p.replacements.map((r) => r.replace)
+    : (p.patterns || []).map(() => p.replace)).filter((t) => typeof t === "string");
+  for (const marker of p.markersWritten) {
+    if (!Array.isArray(p.markers) || !p.markers.includes(marker)) {
+      writtenRecs.push("#" + p.id + " 的 markersWritten 不在 markers 里: " + marker);
+      continue;
+    }
+    if (!texts.some((t) => t.includes(marker))) {
+      writtenRecs.push("#" + p.id + " 声称会写出、但 replacement 里没有: " + marker);
+    }
+  }
+}
+console.log("markersWritten=" + withWritten.length + " 条补丁 / " +
+  withWritten.reduce((n, p) => n + p.markersWritten.length, 0) + " 个标记" +
+  (writtenRecs.length ? " 伪声明=" + writtenRecs.length : " 声明自洽=ok"));
+for (const rec of writtenRecs) fail(rec);
+
 if (!process.exitCode) console.log("✓ 补丁表自检通过");

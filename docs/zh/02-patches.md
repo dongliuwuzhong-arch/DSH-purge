@@ -90,8 +90,13 @@
 
 清单在 `lib/core.js:1918-1933` 读（`readExcludePatches` / `withoutExcluded`），生效点两处：
 
-- `applyPatchesAllHosts()`（`core.js:1936`）—— 四个应用入口全走它（`lib/index.js:1272 / 1345 / 1975 / 2337`），所以"到处生效"；
-- `patchStatus()`（`core.js:4221`）—— 被排掉的 id 不进状态表，面板既不贴也不显示成待贴。
+- `applyPatchesAllHosts()`—— 五个应用入口全走它（`lib/index.js:1272 / 1345 / 1976 / 2339`、`lib/reapply.js:368`），所以"到处生效"；
+- `patchStatus()`—— 被排掉的 id 不进状态表，面板既不贴也不显示成待贴。
+
+⚠ 1.4.1 起 `applyPatchesAllHosts` **默认只打 `options.aiBase` 明确传进来的那一棵**，
+全宿主扫描必须显式 `{ allHosts: true }`（沙箱/测试里以前调用一次就会把现网也写掉，影子 2026-11-16 实测 60 次越界写）。
+上面五个调用点都显式开了它；返回值里 `hostPaths` / `skippedHosts` / `scope` 逐条给出打到哪儿，日志也逐条打印。
+测试/沙箱还能用 `enumerateHosts`（替换枚举）和 `finishHost: false`（跳过宿主 bin 注入）。
 
 清单写坏了（不是合法 JSON、或字段不是数组）按"没排除"处理。1.3.8 起支持。
 典型用法就是 #19：想用温和剪枝，就不能让 #19 把宿主的 `pruneContent()` 改回 `return null`。

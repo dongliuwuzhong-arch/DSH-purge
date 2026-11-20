@@ -3,6 +3,58 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 / rc.3 兼容变体**。
 上游以 MIT 发布，仍在维护（发版到 1.1.81，`dshTarget: 0.2.0-rc.2`）；本分支跟的是 0.2.1-rc.3。
 
+## 1.4.1 · 2026-11-16 · 影子轮之后的三件事（rc.5 收尾 D1）
+
+补丁表 88 条未变；测试 194 → 217。起因是 `记录\影子-rc5-20261116.md` 的 §4 与 §5.3 三条。
+
+### #24 PRESET_FETCH_ENABLED 在 rc.5 上从未落地
+
+1. rc.3 起的出厂 `presets/{standard,ptc,cordis}.patch.yml` 就是 `fetch: true`（10/12/14 缩进），
+   而这条唯一的 pattern 是 **0 缩进 + `fetch: false`**（那一形态在 liangshen / 用户 unrestricted 上），
+   于是在这两份树上 pattern 命中 0。现加第三条：认出厂整块形态，只追加痕迹注释 `# [dsh-purge] preset fetch enabled`。
+2. append 型替换的 pattern 打完仍在场，所以加了 `replacement.once`：标记已在场就不再贴第二遍（实测二次 apply 0 变化）。
+3. 现网的绿一直是**借来的**：三份出厂 preset 里从来没有那行注释，只有 liangshen 那份有。
+   新增 `satisfiedBy`：出厂整块（14 空格 `fetch: true` + `searchTimeoutMs`）已是目标态的文件判 applied，
+   不再挂着"待应用"催人点。判据只认出厂整块形态，0 缩进的上游原句照旧 skipped（S1/A5 规则不动）。
+
+### 4 条"部分落地还报绿"：都是 marker 声明错，不是 replacement 没落地
+
+4. `markers` 里混着四类**本表不会写出**的标记：旧编号别名（#100 的 `[dsh-purge-86]`、#101 的 `[dsh-purge-101]`、
+   #102 的 `[dsh-purge-90]`）、2026-11-01 手打进宿主的 `[dsh-fix 2026-11-01]`、上游原句（#24 的 `fetch: true`）、
+   只对旧宿主有效的分支写的 `[dsh-purge] 0.2.2 tool ask failopen`（#62，rc.3 之后那形态换成 `approvalDenial(...)`）。
+5. 新增 `markersWritten`（本表真会写出的那几条）+ `patchWrittenMarkers()`：落地核对只认它。
+   `markers` 与 `patchApplied` 一个字节没动——认旧标记是为了不在旧块上再叠一层（#102 的 skipIfMarked 靠它），
+   收紧等于把已贴好的宿主判成没贴。`assert-patches` 增一条自检：声明的标记必须逐字出现在自己的 replacement 里。
+6. rc.5 实树（私有副本 + 围栏）apply 一遍：五条 `markersWritten` 全部命中（#24 1/1、#62 2/2、#100 1/1、#101 1/1、#102 1/1）。
+
+### applyPatchesAllHosts 会枚举到现网宿主
+
+7. 以前无条件 `enumeratePatchAiBases()`：沙箱里调用一次就把 `%INSTALL_DIR%` 也列进 hosts 去写（影子实测 60 次越界写被拦）。
+   现在默认只打 `options.aiBase` 明确传进来的那一棵；全宿主扫描必须显式 `{ allHosts: true }`。
+8. 五个调用点（`index.js` 四处 + `bin/dsh-purge.js` + `reapply.js` + `ensureHostClean`）显式开 `allHosts`，行为不变。
+9. 返回值多 `hostPaths` / `skippedHosts` / `scope` / `allHosts`，日志逐条打印每个宿主的路径与收尾计数；
+   `enumerateHosts`（注入）与 `finishHost: false`（跳过宿主 bin 注入）给沙箱/测试留口子。
+
+---
+
+## 1.4.1 · 2026-11-16 · 影子/沙箱测试后的收尾
+
+rc.5 上真跑过影子测试（离线 apply×2 + revert，61/61 sha1 全等）与沙箱测试（隔离安装 + 隔离 DSH_HOME 真启动），
+测试暴露的三类问题在本版收尾。补丁表仍 88 条；测试 205 → 217。
+
+1. **#24 在出厂 preset 上从未真正生效**：唯一的 pattern 是 0 缩进 + `fetch: false`（那是 liangshen/用户 unrestricted 的形态），
+   而出厂 `presets/{standard,ptc,cordis}.patch.yml` 本来就是 `fetch: true`（10/12/14 缩进）→ 命中 0。
+   现网"已贴"一直是借 liangshen 那份的绿。新增"出厂整块"分支（`once` 幂等）+ `satisfiedBy` 判据。
+2. **四条"部分落地却报绿"全是 marker 声明错**：#62 / #100 / #101 / #102 声明的是改号前的别名或从未写入的文案。
+   新增 `markersWritten` 与 `patchWrittenMarkers()`：落地核对只认实际写入的标记；`markers` 与 `patchApplied` 一行没动
+   （#102 的 `skipIfMarked` 靠认旧标记防止在旧块上叠第二层）。
+3. **`applyPatchesAllHosts` 会枚举到现网宿主**（影子测试实测：把 `%INSTALL_DIR%` 也列进 hosts，60 次越界写被围栏拦下）。
+   现在默认只处理显式传入的 aiBase，全宿主扫描必须 `{ allHosts: true }`；`revertAllHosts` 同款。
+4. `zstd` 之外：`revertAll` 不再留"字节相同"的等值 bak（clean 树上会剩 5 个）。
+
+同时记录：rc.5 上 61 个目标文件、88 条补丁 applied 71 / already 5 / missing 7（沙箱缺 liangshen·hooks 路径）/
+pattern_not_found 4（#21 #56 #77 #88，均为既有已知）；桌面壳 5 条全贴，与现网壳逐行 diff 只差版本字面量一行。
+
 ## 1.4.0 · 2026-11-16 · 六路审计后的修复 + rc.5 适配 + 升级护栏
 
 起因：宿主 0.2.2-rc.5 要来了，全面审计 88 条补丁与破甲自身。审计分六路（代码语义 / 配置 / 文档 / 测试 / rc.5 适配 / rc.3→rc.5 差分），修复分四路。
