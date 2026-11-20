@@ -1131,3 +1131,15 @@ node scripts/assert-patches.mjs     # 补丁条数声明对不上会直接红
 换包：留资产 → 先升插件 → 解包候选 → 预检 0 → 停宿主 → 破甲换包 → 重打 → 2.8 全跑
 回滚：revertAll 十桶；unrevertable / emptyBak / patched 三类停止操作，先找回原件
 ```
+
+
+## 附录 C · 沙箱测试的两个环境坑（2026-11-16 实测）
+
+1. **会话里带 `ELECTRON_RUN_AS_NODE=1` 时，桌面 exe 会退化成 node**：`--user-data-dir` 报 `bad option`（exit 9），
+   不给参数则静默 exit 0。跑沙箱启动测试前先把这个环境变量摘掉。
+2. **Electron 的 userData 不走 `APPDATA`**（内部用 `SHGetKnownFolderPath`）：只重定向 `APPDATA` 不够，
+   不显式给 `--user-data-dir` 就会撞现网单实例锁 → `claimDesktopSingleInstance` 直接 quit。
+   沙箱测试要同时给 `DSH_HOME`、`USERPROFILE`（`APPDATA` 跟着它走）和 `--user-data-dir`。
+3. **影子测试的围栏不是自觉**：`--import` 阶段包住 `node:fs` 全部写 API，沙箱外抛 `EFENCE`。
+   2026-11-16 实测拦下 60 次 `applyPatchesAllHosts` 越界写（它会把现网宿主也枚举进来）——
+   所以 1.4.1 给它加了 `{ allHosts: true }` 门槛。
