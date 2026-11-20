@@ -3,6 +3,31 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 / rc.3 兼容变体**。
 上游以 MIT 发布，仍在维护（发版到 1.1.81，`dshTarget: 0.2.0-rc.2`）；本分支跟的是 0.2.1-rc.3。
 
+## 1.3.6 · 2026-11-16 · 桌面换包三处缺陷
+
+来自宿舍机升级 rc.3 的复盘（三处都在，逐条核过代码）。补丁表仍是 88 条，测试 127 → 130。
+
+### 1. 探针把一次超时永久缓存（最该改）
+
+`lib/desktop.js` 里 `wshJsEngineCached` 原来无条件缓存：探针 4 秒超时就写 `false`，
+而这个进程之后**再也不重探**。开机那阵磁盘和杀软正忙，4 秒很容易超——一次误判，整场都走
+脆弱的那条路。改成 `shouldReprobeWshJs()`：**成功永久缓存，失败只沿用 60 秒**。
+
+### 2. 日志把两种病因说成一种
+
+`wscript 不能执行 .js，改用 PowerShell 挪开 app.asar` 这句在 `plan.kind === "powershell"`
+时打，但进这个分支有两个原因：探针 false，**或者**脚本含非 ASCII 字符。两种病一个说法，
+照着字面查必然查错方向。现在把 `wshJs` 和 `scriptAscii` 两个值直接打进日志。
+
+### 3. `gracefulExit` 的 1500ms 太短
+
+注释里"PowerShell 会在 ~200-500ms 内 kill Electron"是乐观值：冷启动常超 1.5 秒，
+host 先退 → main.js 的 ChildProcess listener 先触发 → 弹崩溃窗。放宽到 5000ms。
+
+### 还没解的
+
+升级窗口期的弹窗是**顺序问题**：#83/#84 靠补丁抑制弹窗，而换包那一刻 Electron 读的还是
+官方 `app.asar`，补丁根本没生效。这条改的是"少弹一次"，不是"不弹"。
 ## 1.3.5 · 2026-11-15 · 人格基线不再每步重发
 
 补丁表 88 条（87 → 88，新增 105 AGENT_INSTRUCTIONS_SURFACE_DEDUPE）。
