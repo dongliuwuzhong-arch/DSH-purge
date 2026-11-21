@@ -3,9 +3,11 @@
 //
 // 2026-11-22（V15 文档审计 §9）：病根不是笔误，是**没有任何东西会因为文档写错而变红**。
 // 这份脚本要挡的六类（都能离线核，不联网）：
-//   1 版本一致   package.json version / dsh.version / release-notes 首行 / CHANGELOG 首条 / docs 的"当前插件版"
+//   1 版本一致   package.json version / dsh.version / release-notes 首行 / CHANGELOG 首条 /
+//                两版根 README 的标题行 + 表格版本行 / docs 的"当前插件版"（共 9 个位点，缺一个也红）
 //   2 宿主基线   package.json dshTarget = 文档里"当前适配 / dshTarget"字面值 = preflight 读的那个字段
-//   3 补丁条数   lib/core.js 的 ALL_PATCHES.length = 所有"补丁表 N 条"
+//   3 补丁条数   lib/core.js 的 ALL_PATCHES.length = 所有"补丁表 N 条" / "N patches"，
+//                以及任何"这一行提到补丁、又出现 N 条"的写法（表格、"当前 77 条"那种）
 //   4 用例数     真实用例数（跑 test/*.test.mjs 数出来，或 --tests N 注入）= 所有"N 例 / tests N"
 //   5 行号引用   正文里每个 lib|bin|scripts/xxx:NN 必须落在真实文件的行数内（±3 行内找不到标识符只 warn）
 //   6 禁用词     "上游 / 跟随 / 跟踪 / 跟版 / 等上游 / 仍在维护" 在非历史段落出现即红
@@ -82,8 +84,17 @@ function walkMarkdown(root, relDir, out, depth = 0) {
 
 // 语义锚点：这几句话是"值写在文档里"的唯一形态，重写文档时别改口，改了这里会红。
 export const ANCHORS = {
+  // 2026-11-22（终审 A §6 的盲区 3）：1.5.2 里两版根 README 的标题与表格一直写着旧版本，
+  // 而第 1 类当时只认 docs/zh/README 那一句 —— 于是「首页写 1.5.0、包里是 1.5.2」四道门全绿放行。
+  // 现在四处全锁：两版 README 的标题行 + 表格版本行、docs/zh/README 的「当前插件版」、release-notes 首行。
+  // 标题行锚用「Harness」+「·」两件特征，不抄整句原文：改副标题不该误红，改版本必须红。
   version: [
+    { file: "README.md", pattern: /Harness[^*\n]*·\s*v?([0-9][0-9A-Za-z.\-]*)/, label: "标题行版本" },
+    { file: "README.md", pattern: /^\|\s*Plugin version\s*\|\s*v?([0-9][0-9A-Za-z.\-]*)\s*\|/, label: "Plugin version 表行" },
+    { file: "README.zh-CN.md", pattern: /Harness[^*\n]*·\s*v?([0-9][0-9A-Za-z.\-]*)/, label: "标题行版本" },
+    { file: "README.zh-CN.md", pattern: /^\|\s*当前插件版\s*\|\s*v?([0-9][0-9A-Za-z.\-]*)\s*\|/, label: "当前插件版 表行" },
     { file: "docs/zh/README.md", pattern: /当前插件版\s*\*\*([0-9][0-9A-Za-z.\-]*)\*\*/, label: "当前插件版" },
+    { file: "release-notes.md", pattern: /^#\s*v?([0-9][0-9A-Za-z.\-]*)\s*$/, label: "首行版本" },
   ],
   host: [
     { file: "docs/zh/README.md", pattern: /当前适配\s*\*\*DSH\s+([0-9][0-9A-Za-z.\-]*)\*\*/, label: "当前适配" },
@@ -199,21 +210,29 @@ function checkVersions(root) {
   const version = String(pkg.version ?? "").trim();
   const vals = [{ label: "package.json version", value: version }];
   vals.push({ label: "package.json dsh.version", value: String(pkg.dsh?.version ?? "").trim() });
-  const notesFirst = linesOf(read(root, "release-notes.md"))[0] || "";
-  vals.push({ label: "release-notes.md 首行", value: (notesFirst.match(/^#\s*v?([0-9][0-9A-Za-z.\-]*)/) || [])[1] || "" });
   const changelog = read(root, "CHANGELOG.md") || "";
   const firstHeading = (linesOf(changelog).find((line) => /^##\s+/.test(line)) || "");
   vals.push({ label: "CHANGELOG.md 首条", value: (firstHeading.match(/^##\s+v?([0-9][0-9A-Za-z.\-]*)/) || [])[1] || "" });
+  // release-notes 首行以前是这里单独读的，现在它是一条正式锚点（上面 ANCHORS.version 的最后一条），
+  // 这样它的位置、缺点时的报错都跟其他锚点同一种形态。
+  let anchors = 0;
   for (const spec of ANCHORS.version) {
     const hit = findAnchor(root, spec);
     if (!hit.ok) problems.push(hit.why);
-    else vals.push({ label: spec.file + " 的" + spec.label, value: hit.value, where: spec.file + ":" + hit.line });
+    else {
+      anchors += 1;
+      vals.push({ label: spec.file + " 的" + spec.label, value: hit.value, where: spec.file + ":" + hit.line });
+    }
   }
   for (const item of vals) {
     if (!item.value) problems.push(item.label + " 读不到版本号");
     else if (item.value !== version) problems.push((item.where || item.label) + " 是 " + item.value + "，package.json version 是 " + version);
   }
-  if (!problems.length) notes.push("五处一致：" + version);
+  if (!problems.length) {
+    notes.push(vals.length + " 个位点全一致：" + version +
+      "（文档锚 " + anchors + " 处：两版根 README 的标题行 + 表格版本行、docs/zh/README 的当前插件版、release-notes 首行；" +
+      "另 package.json version / dsh.version 与 CHANGELOG 首条）");
+  }
   return { problems, notes };
 }
 
@@ -242,6 +261,40 @@ function checkHost(root) {
   return { problems, notes };
 }
 
+/**
+ * 一行里的补丁条数声明，三种句式都认；重复报同一处会让人以为有好几个错，所以按数字位置去重。
+ *
+ * 2026-11-22（终审 A §6 的盲区 1、2）：1.5.2 的门只认「补丁表 N 条」一句中文，
+ * 于是 README.md 的「77 patches」和 handbook/00 表格里的「当前 77 条」改成 78 都全绿。
+ */
+export function patchClaims(line) {
+  const claims = [];
+  const add = (idx, value, form) => claims.push({ idx, value: Number(value), form });
+  // ① 句式声明：「补丁表 88 条」/「补丁表仍 88 条」/「补丁表（77 条）」/「补丁 77 条：applied 76」。
+  //    数字必须紧贴「补丁(表)」——不然「补丁是一次性改写…（现网 31 条）」那种描述会被误绑成声明。
+  for (const m of line.matchAll(/补丁表?\s*(?:仍|共|还是|现|是)?\s*[（(]?\s*(\d+)\s*条/g)) {
+    add(m.index + m[0].lastIndexOf(m[1]), m[1], "补丁表 N 条");
+  }
+  // ② 英文句式：77 patches（两版英文 README 的表格就是这一句）。
+  for (const m of line.matchAll(/(\d+)\s+patches\b/g)) add(m.index, m[1], "N patches");
+  // ③ 表格兜底：第一格是「补丁表」的那种表行，值是 77 但句式是「真源。当前 77 条」（handbook/00）。
+  //    只放行这一种形态，其它行里随便一个「N 条」都不算声明 —— 松到「整行提过补丁」就会把
+  //    「其余 63 条被改了它不报」读成表数。30 以下是小数目（4 条冷存 / 7 条物理删），不是表总数。
+  if (/^\s*\|\s*补丁表\s*\|/.test(line)) {
+    for (const m of line.matchAll(/(\d+)\s*条/g)) {
+      if (Number(m[1]) < 30) continue;
+      add(m.index, m[1], "补丁表行的 N 条");
+    }
+  }
+  const seenAt = new Set();
+  return claims.filter((c) => {
+    const key = c.idx + ":" + c.value;
+    if (seenAt.has(key)) return false;
+    seenAt.add(key);
+    return true;
+  });
+}
+
 function checkPatchCount(root, docs, byKind) {
   const problems = [];
   const notes = [];
@@ -255,13 +308,11 @@ function checkPatchCount(root, docs, byKind) {
     }
     const text = doc.rel === "CHANGELOG.md" ? firstSection(doc.text) : doc.text;
     linesOf(text).forEach((line, i) => {
-      // "补丁表 88 条"、"补丁表仍 88 条"、"补丁表共 88 条" 都算声明，别让一句副词把它绕过去。
-      const re = /补丁表\s*(?:仍|共|还是|现)?\s*(\d+)\s*条/g;
-      let hit;
-      while ((hit = re.exec(line)) !== null) {
+      for (const claim of patchClaims(line)) {
         seen += 1;
-        if (Number(hit[1]) !== count) {
-          problems.push(doc.rel + (doc.rel === "CHANGELOG.md" ? "（首节）" : "") + " 第 " + (i + 1) + " 行写「补丁表 " + hit[1] + " 条」，实际 " + count + " 条");
+        if (claim.value !== count) {
+          problems.push(doc.rel + (doc.rel === "CHANGELOG.md" ? "（首节）" : "") + " 第 " + (i + 1) +
+            " 行写「" + claim.form.replace("N", claim.value) + "」，实际 " + count + " 条");
         }
       }
     });
@@ -270,8 +321,8 @@ function checkPatchCount(root, docs, byKind) {
   const changelogFirst = firstSection(read(root, "CHANGELOG.md") || "");
   if (!/补丁表\s*(?:仍|共|还是|现)?\s*\d+\s*条/.test(changelogFirst)) problems.push("CHANGELOG.md 首节里没有「补丁表 N 条」（assert-patches 也依赖它）");
   if (!problems.length) {
-    notes.push("补丁表 " + count + " 条：文档 " + seen + " 处声明全对（扫了 " + coverageText(byKind) +
-      (snapshot ? "；history " + snapshot + " 篇按快照豁免" : "") + "）");
+    notes.push("补丁表 " + count + " 条：文档 " + seen + " 处声明全对（句式：补丁表 N 条 / N patches / 提到补丁的 N 条；扫了 " +
+      coverageText(byKind) + (snapshot ? "；history " + snapshot + " 篇按快照豁免" : "") + "）");
   }
   return { problems, notes };
 }
@@ -567,7 +618,7 @@ function checkCommandSmoke(root) {
 }
 
 export const CLASS_TITLES = [
-  { id: 1, title: "版本五处一致" },
+  { id: 1, title: "版本一致（package.json / 两版 README 标题+表 / docs/zh/README / release-notes 首行 / CHANGELOG 首条）" },
   { id: 2, title: "宿主基线字符串" },
   { id: 3, title: "补丁条数" },
   { id: 4, title: "用例数" },
@@ -606,7 +657,8 @@ function main() {
     console.log([
       "用法: node scripts/assert-docs.mjs [--root <仓库根>] [--tests <N>] [--list]",
       "",
-      "六类文档断言（版本 / 宿主基线 / 补丁条数 / 用例数 / 行号引用 / 禁用词）。退出码 0 = 全绿。",
+      "六类文档断言（版本 / 宿主基线 / 补丁条数 / 用例数 / 行号引用 / 禁用词）+ 第 7 类命令冒烟。退出码 0 = 全绿。",
+      "第 7 类没有宿主时会跳过并计数，末行写「跳过 N 条（未核）」，不写「七类全绿」。",
       "--root  只换被检查的仓库根；补丁表条数永远取本仓库的 lib/core.js，不随 --root 变。",
       "--tests 直接给用例数（默认跑 node --test test/*.test.mjs 数出来）。",
       "--list  只打印六类的名字，不检查。",
@@ -639,15 +691,35 @@ function main() {
   console.log("root=" + root);
   const cov = results.coverage || { byKind: {} };
   console.log("扫描集=" + (coverageText(cov.byKind) || "(空)"));
-  if (!redClasses) {
-    // 「六类全绿」这句被 handbook/README 与两版 README 逐字引用，保持原文不动；
-    // 第 7 类是新增的，另起一行说清它跑到了什么。
-    console.log("六类全绿。");
-    console.log("（第 7 类命令冒烟同样通过：" + ((results[6].notes || []).find((n) => n.startsWith("命令冒烟")) || "无输出") + "）");
+  const summary = greenSummary(results);
+  if (summary) {
+    for (const line of summary) console.log(line);
     return 0;
   }
-  console.log("六类里 " + redClasses + " 类红，共 " + redItems + " 处。");
+  console.log("七类里 " + redClasses + " 类红，共 " + redItems + " 处。");
   return 1;
+}
+
+/**
+ * 末行汇总（全绿时的最后两行：先明细，再结论 —— 结论在最后一行，tail 读到的就是结论）。
+ *
+ * 2026-11-22（终审 A §B1 + §6 盲区）：1.5.2 不管第 7 类跑没跑，末两行都是「六类全绿。」
+ * 加一句「第 7 类…同样通过」。于是「没有宿主、三条命令全跳过」和「三条都真跑了」打印得一模一样，
+ * 只读最后一行的人还会以为门没跑完。现在：
+ *   · 第 7 类一条都没跳过 → 「七类全绿。」（真跑过才敢这么写）；
+ *   · 有跳过 → 「六类全绿；第 7 类命令冒烟跳过 N 条（未核）」——跳过不是通过，措辞得分开。
+ * 判断放这里而不是 main() 里，测试才能直接喂假的 results 验这两种形态。
+ */
+export function greenSummary(results) {
+  if (!Array.isArray(results) || !results.length) return null;
+  if (results.some((r) => !r || !r.ok)) return null;
+  const smoke = results[6] || {};
+  const scope = (smoke.notes || []).find((n) => n.startsWith("命令冒烟")) || "第 7 类无输出";
+  const skipped = (smoke.skipped || []).length;
+  const head = skipped === 0
+    ? "七类全绿。"
+    : "六类全绿；第 7 类命令冒烟跳过 " + skipped + " 条（未核）。";
+  return ["（第 7 类：" + scope + "）", head];
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {

@@ -1,6 +1,6 @@
 # dsh-purge
 
-**Prompt and host-patch plugin for DeepSeek Harness · 1.5.0**
+**Prompt and host-patch plugin for DeepSeek Harness · 1.5.3**
 
 Derived from [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 1.1.71 (MIT) and independently maintained since: the host baseline is pinned at DSH **0.2.2-rc.5**, and the patch table, the judgments and these docs serve this tree only — no external release cadence is followed.
 
@@ -8,10 +8,10 @@ Derived from [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 1
 
 | Item | Value |
 | --- | --- |
-| Plugin version | 1.5.0 |
+| Plugin version | 1.5.3 |
 | Host baseline (pinned) | DSH 0.2.2-rc.5 |
 | Patch table | 77 patches, max id 105 (plus 4 archived entries outside the count) |
-| Tests | 340 tests |
+| Tests | 356 tests |
 | Source (fork point) | [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 1.1.71 — credited for origin only, not a reference point |
 | This repository | [dongliuwuzhong-arch/DSH-purge](https://github.com/dongliuwuzhong-arch/DSH-purge) |
 
@@ -43,8 +43,8 @@ Derived from [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 1
 | --- | --- | --- |
 | Patch table | `node scripts/assert-patches.mjs` | `✓ 补丁表自检通过` |
 | Persona layer | `node scripts/assert-soul-guard.mjs` | `soul-guard ok`, digest matches `soul-guard.lock` |
-| Versions | `node scripts/assert-versions.mjs` | `✓ 四处一致：1.5.0` |
-| Docs | `node scripts/assert-docs.mjs` | final line `六类全绿。` |
+| Versions | `node scripts/assert-versions.mjs` | `✓ 四处一致：1.5.3` |
+| Docs | `node scripts/assert-docs.mjs` | six numeric classes plus the class-7 command smoke. All green → **last** line `七类全绿。` (all three smoke commands really ran); if any smoke step was skipped the last line says `六类全绿；第 7 类命令冒烟跳过 N 条（未核）` — skipped is not passed. The second-to-last line tells you which smoke commands ran |
 
 These are what make a wrong doc go red: banned words, drifted line references, patch counts, test counts, five version sites. Boundaries of each gate: [deep-dive/03](docs/zh/deep-dive/03-工程与发版.md).
 
@@ -62,7 +62,9 @@ node scripts/install-offline.mjs --profile desktop --dsh-home "$HOME/.dsh"
 node scripts/install-offline.mjs --verify --profile desktop --dsh-home "$HOME/.dsh"
 ```
 
-What correct looks like: `--dry-run` prints five `[dry-run]` lines (source / target / profile / would-copy / would-write) and changes nothing; the real run prints `installed dsh-purge@<version>` and the five following lines. `--verify` checks exactly one thing — `realpath(node_modules/dsh-purge) == realpath(plugins/dsh-purge)` — so it exits 0 only for the junction form the installer creates; against a real copy (`--sync` on that directory) it exits 1 with `node_modules link points elsewhere`, and that is the criterion, not a broken install. Verify a real copy with `correct = node scripts/sync-runtime.mjs` → `全部同步` plus `check-paths.mjs` → `源与副本一致`.
+What correct looks like: `--dry-run` prints five `[dry-run]` lines (source / target / profile / would-copy / would-write) when the profile already lists the plugin, and six on a first install — the extra one is `would update package.json`. Nothing is written either way. The real run backs the profile up first and says so — `profile backup: <profile package.json>.dsh-purge.<ts>.bak` — then `installed dsh-purge@<version>` plus four lines (plugin / profile / node_modules link / not running pnpm…).
+
+`--verify` accepts **both** forms and exits 0 for both; its first line is always `verified <plugin version>`. A junction must resolve to the plugin source — pointing elsewhere fails with `链接指向别处 / link points elsewhere` and exits 1. A real copy (`--sync` filled a real directory) is checked as itself: package name `dsh-purge`, the required files, its own version. A copy whose version trails the source only turns the second line into `实体副本 / copy（副本 A，源码 B …）` instead of `（与源码同版本 B）` — a `sync-runtime --apply` reminder, not a broken install.
 
 It does five things: validate the package, copy to `$DSH_HOME/plugins/dsh-purge`, update the profile `package.json`, link `node_modules/dsh-purge`, write `desktop-install.txt`. It does **not** run pnpm, Apply, or restart the host.
 
@@ -103,7 +105,7 @@ What correct looks like: the dock button appears, and `/purge status` prints the
 | `docs/zh/history/` | Archive: nine audits, the 0.2.1 compatibility effort, the sealed-asar essay, the old patch doc. **Every number there is expired** |
 | `lib/` | Implementation: `patches.js` (main table), `patches-legacy.js` (archive), `core.js` (judgments and IO), `sealed-heal.js` (self-heal decision) |
 | `scripts/` | Gates and tools: four `assert-*` gates, `preflight-upgrade.mjs`, `install-offline.mjs` |
-| `test/` | 52 test files, 340 tests |
+| `test/` | 53 test files, 356 tests |
 
 ## Three lessons that actually bite
 
@@ -115,7 +117,7 @@ What correct looks like: the dock button appears, and `/purge status` prints the
 
 Runtime files under `$DSH_HOME`: `prompt-inject.md`, `rules/`, `skills/`, `net-scope-allow.txt`, `dsh-purge/` (plugin state, backup index, `exclude-patches.json`, `asar-swap.json`).
 
-Plugin source lives at `$DSH_HOME/plugins/dsh-purge`; a profile's `node_modules/dsh-purge` is either a junction (created by the offline installer) or a real copy (`--sync` fills a real directory). With a real copy, `--verify` exits 1 by design — judge it with `sync-runtime` + `check-paths` instead.
+Plugin source lives at `$DSH_HOME/plugins/dsh-purge`; a profile's `node_modules/dsh-purge` is either a junction (created by the offline installer) or a real copy (`--sync` fills a real directory). `--verify` passes for both — a junction must point at the source, a real copy is judged as itself. When you want byte-level sameness rather than install validity, use `sync-runtime` + `check-paths`.
 
 ## Source and license
 

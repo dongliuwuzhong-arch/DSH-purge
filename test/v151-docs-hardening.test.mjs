@@ -24,6 +24,31 @@ function write(file, body) {
   fs.writeFileSync(file, body, "utf8");
 }
 
+// 两版根 README 的标题行 + 表格版本行是第 1 类的锚（1.5.3 起），夹具里得有，否则每棵树都先红在版本类。
+const EN_README = (body = "看 \x60lib/core.js:2\x60 的 \x60ALL_PATCHES\x60。") => [
+  "# dsh-purge",
+  "",
+  "**Prompt and host-patch plugin for DeepSeek Harness · 1.2.3**",
+  "",
+  "| Item | Value |",
+  "| --- | --- |",
+  "| Plugin version | 1.2.3 |",
+  "",
+  body,
+  "",
+].join("\n");
+
+const ZH_README = [
+  "# 破甲",
+  "",
+  "**DeepSeek Harness 提示词与宿主补丁插件 · 1.2.3**",
+  "",
+  "| 项 | 值 |",
+  "| --- | --- |",
+  "| 当前插件版 | 1.2.3 |",
+  "",
+].join("\n") + "\n";
+
 /** 一棵六类全绿的文档树（比 test/assert-docs.test.mjs 那棵更小，够用就行）。 */
 function tree(overrides = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "purge-docshard-"));
@@ -33,8 +58,8 @@ function tree(overrides = {}) {
   write(path.join(root, "release-notes.md"), "# 1.2.3\n\n起手。\n");
   write(path.join(root, "CHANGELOG.md"),
     "# 更新日志\n\n## 1.2.3 · 2026-01-01\n\n补丁表 " + PATCHES + " 条；测试 " + TESTS + " 例。\n");
-  write(path.join(root, "README.md"), "# dsh-purge\n\n看 \x60lib/core.js:2\x60 的 \x60ALL_PATCHES\x60。\n");
-  write(path.join(root, "README.zh-CN.md"), "# 破甲\n");
+  write(path.join(root, "README.md"), EN_README());
+  write(path.join(root, "README.zh-CN.md"), ZH_README);
   write(path.join(root, "docs", "zh", "README.md"),
     "# 文档总览\n\n- 当前适配 **DSH 0.2.9-rc.1**\n- 当前插件版 **1.2.3**\n");
   write(path.join(root, "docs", "zh", "00-maintenance.md"),
@@ -97,7 +122,7 @@ test("H5 行号：「`lib/core.js` 第 N 行」这种写法也要核（换写法
 
 test("H5 覆盖口径：0 处引用不再静默通过 —— 输出里必须写明「扫了几篇」，并记成 warn", () => {
   const root = tree();
-  write(path.join(root, "README.md"), "# dsh-purge\n\n没有行号引用的一篇。\n");
+  write(path.join(root, "README.md"), EN_README("没有行号引用的一篇。"));
   const res = run(root);
   assert.equal(res.code, 0, res.out);
   assert.match(res.out, /0 处 file:line 引用/);

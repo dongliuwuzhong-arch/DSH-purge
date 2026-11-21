@@ -242,7 +242,7 @@ cd "%WORKSPACE%" && DSH_HOME="%USERPROFILE%\.dsh" "$NODE" tools/check-paths.mjs 
   #83 DESKTOP_HOST_CLOSE_NO_FATAL  -> missing_file
   ```
 - **实测**：外部 node 进程里 `targetFiles(...)` 的 `desktop-shell` 取值取决于 `DSH_SURFACE`：
-  `DSH_SURFACE=desktop` → `"C:\\Software\\DSH\\resources\\app\\lib\\main.js"`（57 个 key）；
+  `DSH_SURFACE=desktop` → `"%INSTALL_DIR%/resources/app/lib/main.js"`（57 个 key）；
   不设 `DSH_SURFACE` → `undefined`（53 个 key）。对应 #83、#91 在 desktop 面都是 `applied`。
   所以陷阱的正解是「**不设 DSH_SURFACE 时**解析为空」，不是「外部 node 恒空」。
 - **建议替换**：

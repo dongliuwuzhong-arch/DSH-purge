@@ -1,9 +1,12 @@
-# 1.5.2
+# 1.5.3
 
-1.5.1 在 GitHub 的 Linux runner 上三条用例红（本地 Windows 全绿）——不是产品缺陷，是**测试自己带了平台假设**，本版修掉。补丁表仍 77 条；测试 340 例。
+终审 A（文字）/ 终审 B（GitHub 代码）都过；文字侧 5 个 A 级全修，并补上 assert-docs 的三个盲区。补丁表 77 条；测试 356 例。
 
-- `%SystemDrive%` 那条：Linux 上没有这个变量，靠宿主环境必然 reject → 测试显式传 `env: { SystemDrive: "C:" }`。
-- `filterCandidatePaths` 那条：夹具用 `C:/a`，而 posix 上它不是绝对路径、被正当拒绝 → 夹具改用 `path.resolve(os.tmpdir(), …)`。
-- `--status` 认锚点那条：夹具只造了 `resources/app/dsh`，`targetFiles()` 找不到 `@deepseek-ai` → 补一棵最小插件根。
+- `install-offline --verify` 文档回改成真实行为：链接 / 实体副本都认，副本打印 `实体副本 / copy` 并 exit 0。
+- 版本残留 14 处 1.5.0 → 统一到 1.5.3（两份 README、handbook 01/02/99）。
+- 安装章第一条命令的 `%USERPROFILE%` 换成 PowerShell 写法（照抄不再崩）。
+- `--dry-run` 判据由"五行"改为实测 6 行（含 `would update package.json`）。
+- 02 现状快照按 1.5.2 实测重写（应用戳、副本版本、唯一红项）。
+- assert-docs：版本锚扩到四处、补丁/用例数认中英文句式；history 两处本机路径脱敏。
 
-补丁表 77 条；测试 340 例。
+补丁表 77 条；测试 356 例。

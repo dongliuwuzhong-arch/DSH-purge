@@ -2,7 +2,7 @@
 
 > 破甲自 dsh-purge 1.1.71 分出后独立维护：宿主定版在 0.2.2-rc.5，补丁表、判据与文档只服务这一棵树，不再跟随任何外部发行节奏。（出处：YuJunZhiXue/dsh-purge 1.1.71，MIT）
 
-读者：在 CLI 里跑出一条「插件根未找到 / set DSH_BASE」的人，或者要在 web 宿主上装这个插件的人。
+读者：在 CLI 里跑出一条「插件根未找到 / plugin root not found。桌面端：用 --surface desktop 或设 DSH_SURFACE=desktop（DSH_BASE 只在非桌面场景有用）」的人，或者要在 web 宿主上装这个插件的人。
 
 这一册只回答一件事：**这套插件有两个宿主面（web / desktop），两面的目标树、键表、命令行为都不一样，混着看会得出相反的结论。**
 
@@ -96,7 +96,7 @@ node bin/dsh-purge.js --status
 
 ```bash
 DSH_BASE="%INSTALL_DIR%/resources/app/dsh/node_modules/@deepseek-ai" node bin/dsh-purge.js --status
-# 仍然是：插件根未找到 / set DSH_BASE
+# 仍然是：插件根未找到 / plugin root not found。桌面端：用 --surface desktop 或设 DSH_SURFACE=desktop（DSH_BASE 只在非桌面场景有用）
 ```
 
 ### 不会自己定档：`preflight-upgrade.mjs` 和你写的探针

@@ -22,6 +22,42 @@ function writeFile(file, body) {
   fs.writeFileSync(file, body, "utf8");
 }
 
+// 两版根 README 的版本位点是第 1 类的锚（1.5.3 起），所以夹具里也得有：
+// 标题行 +「Plugin version / 当前插件版」表行。句式与真仓库一致，改坏任何一处都该红。
+function readmeEn({ version = "1.2.3", table = "1.2.3", patches = PATCHES, tests = TESTS, ref = "lib/core.js:3" } = {}) {
+  return [
+    "# dsh-purge",
+    "",
+    "**Prompt and host-patch plugin for DeepSeek Harness · " + version + "**",
+    "",
+    "| Item | Value |",
+    "| --- | --- |",
+    "| Plugin version | " + table + " |",
+    "| Patch table | " + patches + " patches, max id 105 (plus 4 archived entries outside the count) |",
+    "| Tests | " + tests + " tests |",
+    "",
+    "看 \x60" + ref + "\x60 的 \x60ALL_PATCHES\x60。",
+    "",
+  ].join("\n");
+}
+
+function readmeZh({ version = "1.2.3", table = "1.2.3", patches = PATCHES, tests = TESTS } = {}) {
+  return [
+    "# 破甲",
+    "",
+    "**DeepSeek Harness 提示词与宿主补丁插件 · " + version + "**",
+    "",
+    "| 项 | 值 |",
+    "| --- | --- |",
+    "| 当前插件版 | " + table + " |",
+    "| 补丁表 | " + patches + " 条，最大 id 105（另有 4 条在存档区，不参与计数） |",
+    "| 测试 | " + tests + " 例 |",
+    "",
+    "宿主基线见 docs/zh/README.md。",
+    "",
+  ].join("\n");
+}
+
 /** 一棵六类全绿的最小文档树。 */
 function fixtureRoot(overrides = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "purge-docs-"));
@@ -33,8 +69,8 @@ function fixtureRoot(overrides = {}) {
     "# 更新日志\n\n## 1.2.3 · 2026-01-01 · 起手\n\n" +
     "补丁表 " + PATCHES + " 条；测试 " + TESTS + " 例。\n\n" +
     "## 1.2.2 · 2025-12-31 · 旧节\n\n这一节是历史，含 upstream 这个词也不算违规？其实算——首节之外不看。\n");
-  writeFile(path.join(root, "README.md"), "# dsh-purge\n\n看 \x60lib/core.js:3\x60 的 \x60ALL_PATCHES\x60。\n");
-  writeFile(path.join(root, "README.zh-CN.md"), "# 破甲\n\n宿主基线见 docs/zh/README.md。\n");
+  writeFile(path.join(root, "README.md"), readmeEn());
+  writeFile(path.join(root, "README.zh-CN.md"), readmeZh());
   writeFile(path.join(root, "docs", "zh", "README.md"),
     "# 文档总览\n\n- 当前适配 **DSH 0.2.9-rc.1**\n- 当前插件版 **1.2.3**，测试 **" + TESTS + " 例**\n");
   writeFile(path.join(root, "docs", "zh", "00-maintenance.md"),
@@ -66,10 +102,12 @@ function assertOnlyRed(res, id) {
   }
 }
 
-test("六类全绿的文档树 → 退出码 0", () => {
+test("六类全绿的文档树 → 退出码 0，且末行说明第 7 类跳过了几条", () => {
   const res = run(fixtureRoot());
   assert.equal(res.code, 0, res.out);
-  assert.match(res.out, /六类全绿/);
+  // 夹具里三条冒烟命令都跑不了（没有 bin/scripts/宿主），第 7 类全跳过 —— 跳过不是通过。
+  assert.match(res.out, /六类全绿；第 7 类命令冒烟跳过 \d+ 条（未核/, res.out);
+  assert.doesNotMatch(res.out, /七类全绿/, res.out);
 });
 
 test("第 1 类：docs 里的「当前插件版」没跟上 → 只有它红", () => {
@@ -98,7 +136,7 @@ test("第 4 类：文档里的用例数与实测不一致 → 只有它红", () 
 
 test("第 5 类：行号引用超出文件行数 → 只有它红", () => {
   assertOnlyRed(run(fixtureRoot({
-    "README.md": "# dsh-purge\n\n看 \x60lib/core.js:9999\x60 的 \x60ALL_PATCHES\x60。\n",
+    "README.md": readmeEn({ ref: "lib/core.js:9999" }),
   })), 5);
 });
 

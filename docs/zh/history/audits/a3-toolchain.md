@@ -47,7 +47,7 @@
 | 行 | 改了什么 | 为什么 |
 |---|---|---|
 | 31 | `const DSH = process.env.DSH_HOME \|\| join(HOME,".dsh")` | 宿主支持 `DSH_HOME` 覆盖家目录，原来写死 `~/.dsh`，环境一变整套路径全错 |
-| 37 | 新增 `INSTALL_ROOT = "C:\\Software\\DSH"` | 只作**最后**兜底锚点，不是主判据 |
+| 37 | 新增 `INSTALL_ROOT = "%INSTALL_DIR%"` | 只作**最后**兜底锚点，不是主判据 |
 | 40-45 | 新增 `argOf()`，支持 `--app-path` | 命令行抓不到时可以人工指定；也让"抓不到"这条分支能复现 |
 | 52-59 | 新增 `psOut()`，所有 PowerShell 调用走它 | 前置 `[Console]::OutputEncoding=UTF8`。原来 PS 5.1 按 936 输出、脚本按 utf8 解，**安装路径一旦带中文 `--app-path` 正则就永远失配** |
 | 63-121 | 段落 1 整体重写：三段兜底（人工参数 → 进程命令行 → 外壳 exe 路径 → 安装锚点）+「文件结构」第二判据 | 原来只认命令行，DSH 没开就全崩 |

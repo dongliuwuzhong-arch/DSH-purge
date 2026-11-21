@@ -1,6 +1,6 @@
 # dsh-purge（破甲）
 
-**DeepSeek Harness 提示词与宿主补丁插件 · 1.5.0**
+**DeepSeek Harness 提示词与宿主补丁插件 · 1.5.3**
 
 > 破甲自 dsh-purge 1.1.71 分出后独立维护：宿主定版在 0.2.2-rc.5，补丁表、判据与文档只服务这一棵树，不再跟随任何外部发行节奏。（出处：YuJunZhiXue/dsh-purge 1.1.71，MIT）
 
@@ -8,10 +8,10 @@
 
 | 项 | 值 |
 | --- | --- |
-| 当前插件版 | 1.5.0 |
+| 当前插件版 | 1.5.3 |
 | 宿主基线（定版） | DSH 0.2.2-rc.5 |
 | 补丁表 | 77 条，最大 id 105（另有 4 条在存档区，不参与计数） |
-| 测试 | 340 例 |
+| 测试 | 356 例 |
 | 源码来源 | [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 1.1.71（fork 点，只管版权与出身） |
 | 本仓库 | [dongliuwuzhong-arch/DSH-purge](https://github.com/dongliuwuzhong-arch/DSH-purge) |
 
@@ -45,8 +45,8 @@
 | --- | --- | --- |
 | 补丁表 | `node scripts/assert-patches.mjs` | `✓ 补丁表自检通过` |
 | 灵魂层 | `node scripts/assert-soul-guard.mjs` | `soul-guard ok`，digest 与 `soul-guard.lock` 一致 |
-| 版本 | `node scripts/assert-versions.mjs` | `✓ 四处一致：1.5.0` |
-| 文档 | `node scripts/assert-docs.mjs` | 末行 `六类全绿。` |
+| 版本 | `node scripts/assert-versions.mjs` | `✓ 四处一致：1.5.3` |
+| 文档 | `node scripts/assert-docs.mjs` | 六类数字 + 第 7 类命令冒烟。**末行**是 `七类全绿。`（三条冒烟都真跑过）；有跳过时末行写 `六类全绿；第 7 类命令冒烟跳过 N 条（未核）`——跳过不算通过。倒数第二行说跑到哪几条 |
 
 这四道门是「文档写错了也会红」的机制：禁用词、行号漂移、补丁条数、用例数、版本五处，全靠它们守。各自的边界见 [deep-dive/03-工程与发版.md](docs/zh/deep-dive/03-工程与发版.md)。
 
@@ -64,16 +64,21 @@ node scripts/install-offline.mjs --profile desktop --dsh-home "$HOME/.dsh"
 node scripts/install-offline.mjs --verify --profile desktop --dsh-home "$HOME/.dsh"
 ```
 
-看到什么算对：`--dry-run` 打出五行 `[dry-run]`（source / target / profile / would-copy / would-write）且不落盘；正式跑完打 `installed dsh-purge@<版本>` 加后面五行。
+看到什么算对：`--dry-run` 打五行 `[dry-run]`（source / target / profile / would-copy / would-write）——**前提是 profile 里已经有这条依赖**；首装会多一行 `would update package.json`（共六行）。两种都不落盘。正式跑：profile 需要改时**先**打 `profile backup: <profile 的 package.json>.dsh-purge.<时间戳>.bak`，再打 `installed dsh-purge@<版本>` 加后面四行（plugin / profile / node_modules link / not running…）。
 
-`--verify` 只核一件事：`realpath(node_modules/dsh-purge) == realpath(plugins/dsh-purge)`。所以**只有安装器建的那种 junction 才退 0**；对着实体副本（`--sync` 铺出来的那份）它必抛 `node_modules link points elsewhere` 并退 1——那是判据本身，不是装坏了。实体副本改判 `node scripts/sync-runtime.mjs`（「全部同步」）+ `check-paths.mjs`（「源与副本一致」）。
+`--verify` **两种形态都认，都退 0**，第一行永远是 `verified <插件版本>`：
+
+- **junction**（安装器建的那种）必须指回插件源目录；指向别处才抛 `链接指向别处 / link points elsewhere` 并退 1。
+- **实体副本**（`--sync` 铺出来的那份，本机就是）核它**自己**是不是一份完整可用的 dsh-purge（名字 / 必需文件 / 版本），通过时打 `实体副本 / copy（与源码同版本 X）`；副本版本落后源码只把这句换成 `（副本 A，源码 B（跑 node scripts/sync-runtime.mjs --apply 对齐；没对齐不影响 --verify 的判定））`，**不判失败**。
+
+要核到「源与副本逐字节一样」再跑 `node scripts/sync-runtime.mjs`（「全部同步」）+ `check-paths.mjs`（「源与副本一致」）——那是另一件事，不是安装判据。
 
 它做五件事：校验包 → 复制到 `$DSH_HOME/plugins/dsh-purge` → 改 profile 的 `package.json` → 建 `node_modules/dsh-purge` 的 junction → 写 `desktop-install.txt`。**不跑 pnpm、不 Apply、不重启。**
 
 也可以直接装压缩包：
 
 ```bash
-node scripts/install-offline.mjs --zip dsh-purge-1.5.0.zip --profile desktop --dsh-home "$HOME/.dsh"
+node scripts/install-offline.mjs --zip dsh-purge-1.5.3.zip --profile desktop --dsh-home "$HOME/.dsh"
 ```
 
 ### ② 官方 CLI（需要网络）
@@ -115,7 +120,7 @@ New-Item -ItemType Junction -Path "$env:USERPROFILE\.dsh\profiles\desktop\node_m
 | `docs/zh/history/` | **存档**：9 篇审计、0.2.1 兼容攻坚、密封 asar 长文、旧补丁表。**数字全部过期** |
 | `lib/` | 插件实现：`patches.js`（主表）/ `patches-legacy.js`（存档区）/ `core.js`（判据与读写）/ `sealed-heal.js`（自愈判定） |
 | `scripts/` | 门与工具：`assert-*` 四道门、`preflight-upgrade.mjs`、`install-offline.mjs` |
-| `test/` | 52 个测试文件 / 340 例 |
+| `test/` | 53 个测试文件 / 356 例 |
 
 ## 三条会真坏事的教训（写在这里，免得翻 CHANGELOG）
 
@@ -133,7 +138,7 @@ New-Item -ItemType Junction -Path "$env:USERPROFILE\.dsh\profiles\desktop\node_m
 - `net-scope-allow.txt` —— 自己的服务器名单
 - `dsh-purge/` —— 插件状态、备份索引、`exclude-patches.json`、`asar-swap.json`（换包台账）
 
-插件源码在 `$DSH_HOME/plugins/dsh-purge`。profile 的 `node_modules/dsh-purge` 有两种形态：**junction**（离线安装器建的）或**实体副本**（`--sync` 往实体目录里铺）。`--verify` 只认前者，对着实体副本必退 1——这类现场用 `sync-runtime` + `check-paths` 判。改了源码要 `dsh-purge --sync` 或重装才会进运行副本。
+插件源码在 `$DSH_HOME/plugins/dsh-purge`。profile 的 `node_modules/dsh-purge` 有两种形态：**junction**（离线安装器建的）或**实体副本**（`--sync` 往实体目录里铺）。`--verify` 两种都认、都退 0：junction 必须指回源码（指错才红），实体副本按它自己核（名字 / 必需文件 / 版本）。要「源与副本逐字节一致」是另一件事，用 `sync-runtime` + `check-paths`。改了源码要 `dsh-purge --sync` 或重装才会进运行副本。
 
 ## 来源与许可
 
