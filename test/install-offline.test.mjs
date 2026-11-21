@@ -7,7 +7,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import {
-  desktopInstallGuard, guardRefusalLines, liveDesktopDirs, normalizeDir, sameOrNested,
+  desktopInstallGuard, guardRefusalLines, liveDesktopDirs, normalizeDir, sameOrNested, splitDirList,
 } from "../scripts/install-offline.mjs";
 
 // 2026-11-16（S4）：不传 --desktop-install 时 install-offline 会自己探测桌面安装目录，
@@ -213,4 +213,14 @@ test("端到端：--help 只打印用法，不装东西", () => {
   assert.equal(r.code, 0, r.out);
   assert.ok(r.out.includes("--allow-live"), r.out);
   assert.ok(!fs.existsSync(path.join(home, "plugins")), "--help 不许落盘");
+});
+
+
+test("splitDirList：Windows 形态用 ; 切，posix 形态用平台 delimiter", () => {
+  // 2026-11-21 CI 红的根因：Linux 上 path.delimiter 是 ":"，把 "C:/Other/DSH" 切成两个假目录。
+  assert.deepEqual(splitDirList("C:/Other/DSH"), ["C:/Other/DSH"]);
+  assert.deepEqual(splitDirList("D:\\A;E:/B"), ["D:\\A", "E:/B"]);
+  const posix = splitDirList("/opt/dsh" + (process.platform === "win32" ? ";" : ":") + "/usr/dsh");
+  assert.deepEqual(posix, ["/opt/dsh", "/usr/dsh"]);
+  assert.deepEqual(splitDirList(""), []);
 });

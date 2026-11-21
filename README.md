@@ -1,6 +1,6 @@
 # dsh-purge
 
-**DSH 0.2.2-rc.3 compatibility fork · 1.4.2**
+**DSH 0.2.2-rc.3 compatibility fork · 1.4.3**
 
 > 📚 **Chinese docs: [docs/zh/README.md](docs/zh/README.md)** — install/upgrade, full patch table, backup & revert semantics, shadow-test method, known limits, audit reports (A1–A8 + shadow-matrix summary).
 
@@ -119,7 +119,7 @@ node scripts/install-offline.mjs --verify --profile desktop --dsh-home "$HOME/.d
 Or install directly from a zip:
 
 ```sh
-node scripts/install-offline.mjs --zip dsh-purge-1.4.2.zip --profile desktop --dsh-home "$HOME/.dsh"
+node scripts/install-offline.mjs --zip dsh-purge-1.4.3.zip --profile desktop --dsh-home "$HOME/.dsh"
 ```
 
 The installer validates the package, copies it to `$DSH_HOME/plugins/dsh-purge`, updates the profile `package.json`, links `node_modules/dsh-purge`, and writes `desktop-install.txt`. It does **not** run pnpm, Apply, or restart DSH.

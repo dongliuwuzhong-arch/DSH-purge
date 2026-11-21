@@ -3,6 +3,18 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.2-rc.3 兼容变体**（另在 0.2.1-rc.3 / 0.2.2-rc.1 / rc.2 上做过影子验证）。
 上游以 MIT 发布，仍在维护（发版到 1.1.81，`dshTarget: 0.2.0-rc.2`）；本分支跟的是 0.2.2-rc.3。
 
+## 1.4.3 · 2026-11-21 · CI 在 Linux 上的第一处真红
+
+拉到了 CI 日志（本机 git 凭据直连 GitHub API），确认 1.4.2 的失败点是 **Unit tests**，且只有一条：
+
+```
+not ok 59 - liveDesktopDirs：认 DSH_DESKTOP_INSTALL 和 dsh-home 里记过的目录
+error: '["C","/Other/DSH","D:/Fixture/DSH"]'
+```
+
+根因：liveDesktopDirs 用 path.delimiter 切 DSH_DESKTOP_INSTALL。Linux 的 delimiter 是 ":"，于是 "C:/Other/DSH" 被切成 "C" 和 "/Other/DSH" 两个假目录。
+修法：新增 splitDirList() —— 值看起来是 Windows 路径（盘符开头或含反斜杠）就用 ";" 切，否则才用平台 delimiter。补跨平台用例，测试 226 → 227。
+
 ## 1.4.2 · 2026-11-16 · 审计 A9/A10 后的四项优化
 
 两位审计员（CI 根因 / 状态一致性）之后按批准的 1-4 项做完。补丁表仍 88 条；测试 217 → 226。

@@ -71,7 +71,7 @@ jobs:
         run: |
           set -euo pipefail
           node -v
-          # 门禁的 glob 交给 shell 展开（这里不加引号）：Node 收到的是 34 个具体文件，
+          # 门禁的 glob 交给 shell 展开（这里不加引号）：Node 收到的是 35 个具体文件，
           # 与 Node 版本无关。原来写成 "test/*.test.mjs"，引号让 shell 不展开，只剩
           # Node 自己的 glob——那是 22+ 才有的，换镜像就红。
           # 也别改成目录参数 `node --test test/`：实测 v24.21/v24.22 上 runner

@@ -1,23 +1,23 @@
 # dsh-purge
 
-**DSH 0.2.2-rc.3 兼容变体 · 1.4.2**
+**DSH 0.2.2-rc.3 兼容变体 · 1.4.3**
 
 > 📚 **中文文档在 [docs/zh/README.md](docs/zh/README.md)**：安装与升级、补丁表全表、备份与回滚语义、影子测试方法、已知限制、审计报告（A1–A8 + 影子矩阵摘要）。
 
 - 上游：[YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge)
 - 本仓库：[dongliuwuzhong-arch/DSH-purge](https://github.com/dongliuwuzhong-arch/DSH-purge)
 - 实测版本：0.2.1-rc.3 · 0.2.2-rc.1 · 0.2.2-rc.2 · 0.2.2-rc.3（影子安装，四棵出厂树）
-- 补丁表 **88 条定义**（可按排除清单屏蔽），测试 **226 例**
+- 补丁表 **88 条定义**（可按排除清单屏蔽），测试 **227 例**
 
-## 当前状态（1.4.2）
+## 当前状态（1.4.3）
 
 | 项 | 值 |
 | --- | --- |
 | 补丁表 | 88 条定义，最大 id 105 |
-| 测试 | 226 pass / 0 fail |
+| 测试 | 227 pass / 0 fail |
 | 实测宿主 | 0.2.2-rc.3（外壳 / 主程序 / 底座三层一致） |
 | 实测坐标系 | 0.2.1-rc.3 · 0.2.2-rc.1 · 0.2.2-rc.2 · 0.2.2-rc.3 四棵出厂树 |
-| 最近三版 | 1.4.0 六路审计后的修复 + rc.5 适配 + 升级护栏 · 1.4.1 影子/沙箱收尾 · 1.4.2 CI 出包修复 + 判定收窄（satisfied 档） + 配置收口 |
+| 最近三版 | 1.4.0 六路审计后的修复 + rc.5 适配 + 升级护栏 · 1.4.1 影子/沙箱收尾 · 1.4.3 CI 出包修复 + 判定收窄（satisfied 档） + 配置收口 |
 
 三条会真坏事的教训，写在这儿免得翻 CHANGELOG：
 
@@ -136,7 +136,7 @@ node scripts/install-offline.mjs --verify --profile desktop --dsh-home "$HOME/.d
 也可以直接安装压缩包：
 
 ```sh
-node scripts/install-offline.mjs --zip dsh-purge-1.4.2.zip --profile desktop --dsh-home "$HOME/.dsh"
+node scripts/install-offline.mjs --zip dsh-purge-1.4.3.zip --profile desktop --dsh-home "$HOME/.dsh"
 ```
 
 安装器会校验包、复制到 `$DSH_HOME/plugins/dsh-purge`、修改 profile 的 `package.json`、建立 `node_modules/dsh-purge` 链接，并写入 `desktop-install.txt`。默认**不执行 pnpm、不 Apply、不重启**。

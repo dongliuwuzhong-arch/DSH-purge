@@ -208,13 +208,26 @@ export function sameOrNested(a, b) {
 /** 现网（真的在用的那份）安装目录。只看"装在哪"的硬证据，不主动 discover 进程/快捷方式：
  *  DSH_DESKTOP_INSTALL、本机 dsh-home 里记过的 desktop-install.txt、当前进程就是宿主 exe、
  *  注册表登记的安装目录。 */
+/**
+ * 把 "一个或几个目录" 的字符串切成分量。
+ * 2026-11-21 CI 红在这：Linux 上 path.delimiter 是 ":"，于是 "C:/Other/DSH" 被切成
+ * ["C", "/Other/DSH"] 两个假目录（测试断言失败）。判据：值看起来是 Windows 路径
+ * （盘符开头或含反斜杠）就用 ";" 切，否则用当前平台的 delimiter。
+ */
+export function splitDirList(value) {
+  const raw = String(value || "");
+  const looksWindows = /^[A-Za-z]:[\\/]/.test(raw) || raw.includes("\\");
+  const sep = looksWindows ? ";" : path.delimiter;
+  return raw.split(sep).map((s) => s.trim()).filter(Boolean);
+}
+
 export function liveDesktopDirs({ env = process.env, dshHome = "", execPath = process.execPath } = {}) {
   const out = [];
   const push = (dir) => {
     const n = normalizeDir(dir);
     if (n && !out.some((x) => x.toLowerCase() === n.toLowerCase())) out.push(n);
   };
-  for (const item of String(env.DSH_DESKTOP_INSTALL || "").split(path.delimiter)) push(item);
+  for (const item of splitDirList(env.DSH_DESKTOP_INSTALL)) push(item);
   if (dshHome) {
     try {
       const fp = path.join(dshHome, "dsh-purge", "desktop-install.txt");
