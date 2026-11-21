@@ -214,15 +214,17 @@ jobs:
           names = zipfile.ZipFile(zip_path).namelist()
           problems = []
 
+          # git archive 会为被 export-ignore 的目录留一条目录条目（"…/docs/notice/"），
+          # 那是目录不是文件——2026-11-22 1.5.0 的 CI 就是被这条误判红的。目录条目不算文件。
           NOTICE_FILES = {"laozhang-live-1.jpg", "laozhang-live-2.jpg", "laozhang-wechat-1.jpg"}
 
-          bad = [n for n in names if n.rsplit("/", 1)[-1] == "preflight-baseline.json"]
+          bad = [n for n in names if not n.endswith("/") and n.rsplit("/", 1)[-1] == "preflight-baseline.json"]
           if bad:
               problems.append("包里出现了本机预检基线（不许发）: " + ", ".join(bad))
 
           # 第三方微信截图（docs/notice，243,971 B，零引用）：.gitattributes 里有 export-ignore，
           # 这里是它失效时的兜底 —— 不是静默剔除，是红。
-          notice = [n for n in names if "/docs/notice/" in n or n.rsplit("/", 1)[-1] in NOTICE_FILES]
+          notice = [n for n in names if not n.endswith("/") and ("/docs/notice/" in n or n.rsplit("/", 1)[-1] in NOTICE_FILES)]
           if notice:
               problems.append("包里出现了 docs/notice 的第三方截图（不许发）: " + ", ".join(notice))
 
