@@ -208,14 +208,12 @@ jobs:
           tmp="${RUNNER_TEMP:-/tmp}"
           test -f "$zip" || { echo "::error::打包产物 $zip 不存在"; exit 1; }
           cat > "$tmp/assert-zip.py" <<'PY'
-          import sys, zipfile
+          import re, sys, zipfile
 
           zip_path, prefix = sys.argv[1], sys.argv[2]
           names = zipfile.ZipFile(zip_path).namelist()
           problems = []
 
-          # git archive 会为被 export-ignore 的目录留一条目录条目（"…/docs/notice/"），
-          # 那是目录不是文件——2026-11-22 1.5.0 的 CI 就是被这条误判红的。目录条目不算文件。
           NOTICE_FILES = {"laozhang-live-1.jpg", "laozhang-live-2.jpg", "laozhang-wechat-1.jpg"}
 
           bad = [n for n in names if not n.endswith("/") and n.rsplit("/", 1)[-1] == "preflight-baseline.json"]
@@ -227,6 +225,19 @@ jobs:
           notice = [n for n in names if not n.endswith("/") and ("/docs/notice/" in n or n.rsplit("/", 1)[-1] in NOTICE_FILES)]
           if notice:
               problems.append("包里出现了 docs/notice 的第三方截图（不许发）: " + ", ".join(notice))
+
+          # _tmp/（V15 收 · F2）：开发期的 *.before.js 快照，211 KB，含 1.4.x 补丁表全文。
+          # 1.5.0 把它提交进来并随 tar/zip 发出去 —— .gitignore 只挡新增，git archive 只认
+          # .gitattributes 的 export-ignore，这里是第三条保险：真漏了要红，不是静默剔。
+          tmp_entries = [n for n in names if "/_tmp/" in n or n.rstrip("/").endswith("/_tmp")]
+          if tmp_entries:
+              problems.append("包里出现了 _tmp/ 开发期快照（不许发）: " + ", ".join(tmp_entries))
+
+          # 没展开的脱敏占位符被当成路径写盘时，会留下名字就带 %VAR% 的条目
+          # （%SystemDrive%/ProgramData/... 这类，2026-11-22 实测发生过）。包名里不该有 %。
+          var_entries = [n for n in names if re.search(r"%[A-Za-z_][A-Za-z0-9_]*%", n)]
+          if var_entries:
+              problems.append("包里出现了带占位符的路径条目（%VAR% 被当目录，见 lib/path-guard.js）: " + ", ".join(var_entries))
 
           required = [
               "package.json",

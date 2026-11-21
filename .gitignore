@@ -13,6 +13,10 @@ docs/agents/
 scripts/tmp-*.mjs
 scripts/test-*.mjs
 .scratch/
+# 开发期的 *.before.js 快照（211 KB，含 1.4.x 补丁表全文）：1.5.0 被误提交并随 tar/zip 发出去。
+# 2026-11-22 起 git rm --cached 掉 + 这里挡住新增 + .gitattributes 走 export-ignore，
+# release.yml 的 zip 断言兜底（真漏了要红，不静默剔）。
+_tmp/
 dsh-redteam-mode-main/
 /1
 
@@ -33,8 +37,11 @@ _archive/
 *.bak-*
 *.bak-原版
 
-# 脱敏占位符被误当路径写盘时留下的垃圾目录（2026-11-22 发现：ProgramData 缓存被复制进来）
+# 脱敏占位符被误当路径写盘时留下的垃圾目录（2026-11-22 发现：ProgramData 缓存被复制进来）。
+# 真正的修法在 lib/path-guard.js：含没展开的 %VAR% / $env: 的候选路径一律 reject，
+# 这几行只是兜底 —— 防止旧副本、手敲命令再把这种目录带进仓库。
 %SystemDrive%/
 %USERPROFILE%/
 %INSTALL_DIR%/
 %WORKSPACE%/
+%SHADOW%/

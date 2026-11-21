@@ -22,6 +22,11 @@
 # 本机预检基线不进任何分发物（GitHub 的 main.tar.gz 也走 export-ignore）
 scripts/preflight-baseline.json export-ignore
 
+# 开发期的 *.before.js 快照（V15 收 · F2）：1.5.0 误提交过 _tmp/（211 KB，含 1.4.x 补丁表全文），
+# tar 与 zip 都带出去了。package.json 的 files 白名单只管 npm tarball；git archive 那条通道
+# 只认这里的 export-ignore。第三条保险是 release.yml 的 zip 内容断言。
+_tmp/** export-ignore
+
 # 第三方微信截图（docs/notice，零引用，243,971 B）：只留在仓库，不进任何分发物。
 # GitHub 的 main.tar.gz / main.zip 走 git archive，那条通道只认这里的 export-ignore；
 # npm tarball 走 package.json files 里的 "!docs/notice"；release zip 由 release.yml 的

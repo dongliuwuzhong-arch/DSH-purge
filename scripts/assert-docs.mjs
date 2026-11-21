@@ -9,8 +9,16 @@
 //   4 用例数     真实用例数（跑 test/*.test.mjs 数出来，或 --tests N 注入）= 所有"N 例 / tests N"
 //   5 行号引用   正文里每个 lib|bin|scripts/xxx:NN 必须落在真实文件的行数内（±3 行内找不到标识符只 warn）
 //   6 禁用词     "上游 / 跟随 / 跟踪 / 跟版 / 等上游 / 仍在维护" 在非历史段落出现即红
+//   7 命令冒烟   真跑 --status / install-offline --check-deps / preflight --dry-run，
+//                断言"看到什么算对"里那句字面串确实出现在输出里（没有宿主时跳过并计数）
 //
-// 退出码：0 = 六类全绿；1 = 有红项（逐条打出来）。
+// 2026-11-22（审计 §5.1 H1/H5/H6/H9）：上面六类原先只扫根 7 篇 + docs/zh 顶层，
+// handbook(1619 行) / deep-dive(615 行) / history 全在盲区，本次查出的 S1 级判据错误
+// 没有一条能让它变红。现在的扫描集递归到 docs/zh/{handbook,deep-dive,history}；
+// history 按它自己 README 的声明（"数字不再维护"）豁免数字与行号两类，但**计入覆盖数**并打出来，
+// 免得"豁免"变成"没扫"。
+//
+// 退出码：0 = 全绿；1 = 有红项（逐条打出来）。
 // 用法：node scripts/assert-docs.mjs [--root <仓库根>] [--tests <N>] [--list]
 //
 // ⚠ 1.5 文档重写完成之前，第 5、6 类（以及第 1/2 类的旧数字）本来就是红的 —— 这是本脚本
@@ -21,19 +29,56 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { ALL_PATCHES } from "../lib/core.js";
+import { installAnchor } from "../lib/surface.js";
 
 const SELF_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-// 走查的文档集：不含 docs/zh/audits/（历史归档，快照不改）与 docs/notice/（图片）。
+// 走查的文档集。
+// 2026-11-22（审计 H8）：清单里原本还写着 COMPAT-0.2.1.md 与 docs/SEALED-ASAR.md，
+// 这两个文件 1.5 之前就搬进 docs/zh/history/ 了 —— 清单腐烂看不出来，是因为 listDocs 静默过滤。
+// 现在清单只留真在根上的，历史区靠下面的递归扫描带进来；清单里写了但磁盘上没有的，打 warn。
 const DOC_FILES = [
   "README.md",
   "README.zh-CN.md",
   "CHANGELOG.md",
   "release-notes.md",
-  "COMPAT-0.2.1.md",
   "SOUL-GUARD.md",
-  "docs/SEALED-ASAR.md",
 ];
+
+/** docs/zh 下每一层的分类。history 是快照区：数字/行号按它自己 README 的声明豁免。 */
+function docKind(rel) {
+  const n = String(rel).replace(/\\/g, "/");
+  if (n.startsWith("docs/zh/history/")) return "history";
+  if (n.startsWith("docs/zh/handbook/")) return "handbook";
+  if (n.startsWith("docs/zh/deep-dive/")) return "deep-dive";
+  if (n.startsWith("docs/zh/")) return "zh";
+  return "root";
+}
+
+/** 快照文档：docs/zh/history 整区（含 audits）。数字与行号都不核。 */
+function isSnapshotDoc(doc) {
+  return doc.kind === "history";
+}
+
+function walkMarkdown(root, relDir, out, depth = 0) {
+  const dir = path.join(root, relDir);
+  let entries = [];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
+    const rel = path.join(relDir, entry.name).replace(/\\/g, "/");
+    if (entry.isDirectory()) {
+      // docs/zh/audits 是 V15 期间的审计留档，与 history 同级待遇：不进数字类。
+      if (depth < 3) walkMarkdown(root, rel, out, depth + 1);
+      continue;
+    }
+    if (!entry.name.endsWith(".md")) continue;
+    out.push({ rel, text: read(root, rel) || "", kind: docKind(rel) });
+  }
+}
 
 // 语义锚点：这几句话是"值写在文档里"的唯一形态，重写文档时别改口，改了这里会红。
 export const ANCHORS = {
@@ -60,10 +105,21 @@ const BANNED_WORDS = [
   { pattern: /upstream/i, why: "英文「上游」" },
 ];
 // 允许出现"上游"的行：版权/来源陈述、函数名。别的都不许。
+//
+// 2026-11-22（审计 H6）：这张表原先对 hard 词也生效，于是**任何一行只要带上「（出处：X）」**，
+// 写「仍跟随上游发版」也不会红 —— 白名单比禁用词还宽，等于禁用词没用。
+// 现在分两层：
+//   · soft 词（上游 / upstream）：来源、出处、fork、函数名都放行（那是法律陈述与代码标识）；
+//   · hard 词（跟随 / 跟踪 / 跟版 / 等上游 / 仍在维护 / tracking）：白名单**不放行**，
+//     只在两个地方放过 —— ①整节是「上游与许可」这类章节；②这一行明确**否定**了跟随姿态
+//     （"不再跟随任何外部发行节奏"是这套文档的定位句，必须留）。
 const BANNED_ALLOW = [
   /markerLooksUpstream/,
   /(派生|分叉|fork|来源|出处|版权|原作者|Source|contributors)/i,
 ];
+// 否定跟随的那几种写法。只在 hard 词上用；不写成宽泛的 /不.*跟随/ 是怕把
+// "虽不完美仍在跟随"这种也放过去。
+const BANNED_NEGATION = /(不再|不|无须|无需|没有必要|不去|拒绝|停止)\s*(再)?\s*(跟随|跟踪|跟版|等上游)/;
 // 允许整块出现的章节（许可与来源）：标题命中即整节豁免，直到下一个标题。
 const BANNED_SECTION = /^#{1,6}\s+.*(上游|来源|许可|版权|upstream|license|source|credit)/i;
 
@@ -75,17 +131,31 @@ function read(root, rel) {
   }
 }
 
-function listDocs(root) {
-  const out = DOC_FILES.filter((rel) => fs.existsSync(path.join(root, rel))).map((rel) => ({ rel, text: read(root, rel) || "" }));
-  const zh = path.join(root, "docs", "zh");
-  if (fs.existsSync(zh)) {
-    for (const name of fs.readdirSync(zh).sort()) {
-      if (!name.endsWith(".md")) continue;
-      const rel = path.join("docs", "zh", name).replace(/\\/g, "/");
-      out.push({ rel, text: read(root, rel) || "" });
+/** 扫描集 + 覆盖统计。missing 是"清单里写了但磁盘上没有"的那些（warn，不红）。 */
+function listDocsDetailed(root) {
+  const out = [];
+  const missing = [];
+  for (const rel of DOC_FILES) {
+    if (!fs.existsSync(path.join(root, rel))) {
+      missing.push(rel);
+      continue;
     }
+    out.push({ rel, text: read(root, rel) || "", kind: "root" });
   }
-  return out;
+  walkMarkdown(root, path.join("docs", "zh"), out);
+  const byKind = {};
+  for (const doc of out) byKind[doc.kind] = (byKind[doc.kind] || 0) + 1;
+  return { docs: out, missing, byKind };
+}
+
+function listDocs(root) {
+  return listDocsDetailed(root).docs;
+}
+
+/** 覆盖统计的一句话（每类输出都带上，别让"扫了 0 篇"和"全绿"长得一样）。 */
+function coverageText(byKind = {}) {
+  const order = ["root", "zh", "handbook", "deep-dive", "history"];
+  return order.filter((k) => byKind[k]).map((k) => k + " " + byKind[k]).join(" / ");
 }
 
 /** CHANGELOG 只查首节：历史条目里出现"上游"是事实，不是姿态。 */
@@ -172,12 +242,17 @@ function checkHost(root) {
   return { problems, notes };
 }
 
-function checkPatchCount(root, docs) {
+function checkPatchCount(root, docs, byKind) {
   const problems = [];
   const notes = [];
   const count = ALL_PATCHES.length;
   let seen = 0;
+  let snapshot = 0;
   for (const doc of docs) {
+    if (isSnapshotDoc(doc)) {
+      snapshot += 1;
+      continue;
+    }
     const text = doc.rel === "CHANGELOG.md" ? firstSection(doc.text) : doc.text;
     linesOf(text).forEach((line, i) => {
       // "补丁表 88 条"、"补丁表仍 88 条"、"补丁表共 88 条" 都算声明，别让一句副词把它绕过去。
@@ -194,7 +269,10 @@ function checkPatchCount(root, docs) {
   if (!seen) problems.push("所有文档里都找不到「补丁表 N 条」—— 这句话是对表数的唯一声明，删掉等于没人核对");
   const changelogFirst = firstSection(read(root, "CHANGELOG.md") || "");
   if (!/补丁表\s*(?:仍|共|还是|现)?\s*\d+\s*条/.test(changelogFirst)) problems.push("CHANGELOG.md 首节里没有「补丁表 N 条」（assert-patches 也依赖它）");
-  if (!problems.length) notes.push("补丁表 " + count + " 条：文档 " + seen + " 处声明全对");
+  if (!problems.length) {
+    notes.push("补丁表 " + count + " 条：文档 " + seen + " 处声明全对（扫了 " + coverageText(byKind) +
+      (snapshot ? "；history " + snapshot + " 篇按快照豁免" : "") + "）");
+  }
   return { problems, notes };
 }
 
@@ -211,12 +289,17 @@ function countTests(root, injected) {
   return { count: Number(hit[1]), how: "node --test 实测" };
 }
 
-function checkCaseCount(root, docs, injected) {
+function checkCaseCount(root, docs, injected, byKind) {
   const problems = [];
   const notes = [];
   const { count, how } = countTests(root, injected);
   if (count === null) return { problems: [how], notes };
+  let snapshot = 0;
   for (const doc of docs) {
+    if (isSnapshotDoc(doc)) {
+      snapshot += 1;
+      continue;
+    }
     const text = doc.rel === "CHANGELOG.md" ? firstSection(doc.text) : doc.text;
     linesOf(text).forEach((line, i) => {
       for (const re of [/(\d{2,4})\s*例/g, /tests\s+(\d{1,4})/g, /(\d{2,4})\s+tests/g]) {
@@ -231,11 +314,14 @@ function checkCaseCount(root, docs, injected) {
       }
     });
   }
-  if (!problems.length) notes.push("用例数 " + count + "（" + how + "）：文档里没有对不上的数");
+  if (!problems.length) {
+    notes.push("用例数 " + count + "（" + how + "）：文档里没有对不上的数（扫了 " + coverageText(byKind) +
+      (snapshot ? "；history " + snapshot + " 篇按快照豁免" : "") + "）");
+  }
   return { problems, notes };
 }
 
-function checkLineRefs(root, docs) {
+function checkLineRefs(root, docs, byKind) {
   const problems = [];
   const notes = [];
   const cache = new Map();
@@ -248,10 +334,33 @@ function checkLineRefs(root, docs) {
   };
   const warns = [];
   let total = 0;
+  let scanned = 0;
+  let snapshot = 0;
   for (const doc of docs) {
     if (doc.rel === "CHANGELOG.md") continue; // 历史条目的行号是当时的快照，不是当下引用
+    if (isSnapshotDoc(doc)) {
+      snapshot += 1;
+      continue;
+    }
+    scanned += 1;
     linesOf(doc.text).forEach((line, i) => {
-      const re = /(lib|bin|scripts)\/[\w.\-]+\.(?:js|mjs|cjs|json|yml|md):(\d+)/g;
+      // 两种写法都核：`lib/x.js:123` 和 `lib/x.js` 第 123 行。
+      // 第二种以前根本没人管 —— 换一种写法就绕过整类（审计 H5 的另一半）。
+      const refRe = /(lib|bin|scripts)\/[\w.\-]+\.(?:js|mjs|cjs|json|yml|md):(\d+)/g;
+      const lineRe = /`((?:lib|bin|scripts)\/[\w.\-]+\.(?:js|mjs|cjs|json|yml|md))`\s*第\s*(\d+)\s*行/g;
+      for (const match of line.matchAll(lineRe)) {
+        total += 1;
+        const ref = { rel: match[1], want: Number(match[2]), text: match[0] };
+        const linesLocal = loadLines(ref.rel);
+        if (linesLocal === null) {
+          problems.push(doc.rel + " 第 " + (i + 1) + " 行引用 " + ref.rel + "（第 " + ref.want + " 行），但仓库里没有这个文件");
+          continue;
+        }
+        if (ref.want < 1 || ref.want > linesLocal.length) {
+          problems.push(doc.rel + " 第 " + (i + 1) + " 行说 " + ref.rel + " 第 " + ref.want + " 行，该文件只有 " + linesLocal.length + " 行");
+        }
+      }
+      const re = refRe;
       let hit;
       while ((hit = re.exec(line)) !== null) {
         total += 1;
@@ -278,19 +387,35 @@ function checkLineRefs(root, docs) {
       }
     });
   }
-  if (!total) notes.push("正文里没有 file:line 引用");
-  else if (!problems.length) {
-    notes.push("行号引用 " + total + " 处，全部落在真实文件的行数内" + (warns.length ? "；另有 " + warns.length + " 处疑似漂移（warn，不计入退出码）" : ""));
+  const scope = "（扫了 " + scanned + " 篇：" + coverageText(byKind) +
+    (snapshot ? "；history " + snapshot + " 篇按快照豁免" : "") + "）";
+  if (!total) {
+    // 以前这里直接写"正文里没有 file:line 引用"并算通过 —— 整类事实上空转，永远绿。
+    // 现在必须说清"扫了几篇、为什么 0 处也算过"，并把它记成 warn：数量归零本身是可疑信号。
+    notes.push("0 处 file:line 引用" + scope + "；通过理由是「这套文档不给行号」——数量归零会被记成 warn");
+    warns.push("行号引用 0 处" + scope + "：确认全册确实不给行号，否则说明引用被删光了");
+  } else if (!problems.length) {
+    notes.push("行号引用 " + total + " 处，全部落在真实文件的行数内" + scope +
+      (warns.length ? "；另有 " + warns.length + " 处疑似漂移（warn，不计入退出码）" : ""));
   }
   return { problems, notes, warns };
 }
 
-function checkBannedWords(docs) {
+function checkBannedWords(docs, byKind) {
   const problems = [];
   const notes = [];
   let hits = 0;
+  let scanned = 0;
+  let snapshot = 0;
   for (const doc of docs) {
     if (doc.rel === "SOUL-GUARD.md") continue; // 历史声明原件，不动
+    // history 按它自己 README:39 的声明原文保留当年的「上游」字样（"改了就把证据也改了"），
+    // 这是有意的例外；但仍然计入覆盖数，别让"豁免"看起来像"没扫"。
+    if (isSnapshotDoc(doc)) {
+      snapshot += 1;
+      continue;
+    }
+    scanned += 1;
     const text = doc.rel === "CHANGELOG.md" ? firstSection(doc.text) : doc.text;
     let inAllowedSection = false;
     linesOf(text).forEach((line, i) => {
@@ -298,14 +423,147 @@ function checkBannedWords(docs) {
       for (const word of BANNED_WORDS) {
         if (!word.pattern.test(line)) continue;
         hits += 1;
-        if (!word.hard && inAllowedSection) continue;
-        if (BANNED_ALLOW.some((re) => re.test(line))) continue;
+        // 整节是"上游与许可"：soft 与 hard 都放过（那是法律陈述区）。
+        if (inAllowedSection) continue;
+        if (word.hard) {
+          // hard 词只认"明确否定跟随"这一种行内豁免；出处/版权字样不放行。
+          if (BANNED_NEGATION.test(line)) continue;
+        } else if (BANNED_ALLOW.some((re) => re.test(line))) {
+          continue;
+        }
         problems.push(doc.rel + (doc.rel === "CHANGELOG.md" ? "（首节）" : "") + " 第 " + (i + 1) + " 行用了「" + word.pattern.source + "」（" + word.why + "）：" + line.trim().slice(0, 90));
       }
     });
   }
-  if (!problems.length) notes.push("禁用词：扫到 " + hits + " 处命中，全部落在白名单形态里");
+  const scope = "（扫了 " + scanned + " 篇：" + coverageText(byKind) + (snapshot ? "；history " + snapshot + " 篇按快照豁免" : "") + "）";
+  if (!problems.length) notes.push("禁用词：扫到 " + hits + " 处命中，全部落在白名单 / 整节豁免 / 否定跟随的形态里" + scope);
   return { problems, notes };
+}
+
+/**
+ * 第 7 类 · 命令冒烟（V15 收 · 审计 H9 "没有任何一类核文档里的命令能不能跑"）。
+ *
+ * 六类全是字符串比对与文件存在性，所以「判据串根本不存在于任何输出里」这类事它一概看不见：
+ * 本次 S1 级的 A（--status 在 CLI 下打不出逐条状态）、D（check-bak-judge 的字段根本不存在）、
+ * C8（四行 vs 五行）没有一条能让门变红。
+ *
+ * 这一类的做法：真跑三条只读命令，断言"看到什么算对"里那句字面串确实出现。
+ * 需要宿主的那条在没有宿主时**跳过并计数**，不静默通过；脚本不在库里（比如测试用的
+ * 最小文档树）同样跳过并计数 —— "跳过"必须能被读出来。
+ */
+const SMOKE_COMMANDS = [
+  {
+    id: "status",
+    rel: "bin/dsh-purge.js",
+    signature: /dsh-purge 状态 \/ Status/,
+    argv: ["--status"],
+    // 文档 02:18 / 99:25 承诺：不带 DSH_SURFACE 也要能拿到逐条状态。
+    // 本机有宿主时必须是「补丁 N/M 已清洗」；没有宿主时至少要把**有效**的出路写在提示里
+    // （以前写的是 DSH_BASE，而桌面宿主上 DSH_BASE 被 findAiBaseWeb 明确排除，等于指路到死路）。
+    check(out) {
+      const problems = [];
+      for (const want of ["dsh-purge 状态 / Status", "宿主 / surface", "DSH_HOME"]) {
+        if (!out.includes(want)) problems.push("输出里没有「" + want + "」");
+      }
+      if (/补丁 \d+\/\d+ 已清洗/.test(out)) return problems;
+      if (!/未定位宿主插件根/.test(out)) problems.push("既没有「补丁 N/M 已清洗」，也没有「未定位宿主插件根」——判据形态变了");
+      if (!/--surface desktop/.test(out)) {
+        problems.push("没定位到宿主时，提示里必须有 --surface desktop（S1-1：只说设 DSH_BASE 是无效指路）");
+      }
+      return problems;
+    },
+  },
+  {
+    id: "check-deps",
+    rel: "scripts/install-offline.mjs",
+    signature: /--check-deps/,
+    argv: ["--check-deps"],
+    check(out) {
+      const problems = [];
+      for (const want of ["check-deps", "files   ok", "result  ok"]) {
+        if (!out.includes(want)) problems.push("输出里没有「" + want + "」");
+      }
+      return problems;
+    },
+  },
+  {
+    id: "preflight",
+    rel: "scripts/preflight-upgrade.mjs",
+    signature: /破甲基准/,
+    argv: ["--dry-run"],
+    needsHost: true,
+    check(out) {
+      const problems = [];
+      if (!/破甲基准: *[0-9][0-9A-Za-z.\-]* *✓ *一致/.test(out)) problems.push("输出里没有「破甲基准: … ✓ 一致」");
+      if (!/补丁 \d+ 条：/.test(out)) problems.push("输出里没有「补丁 N 条：」这行汇总");
+      if (!/桌面壳/.test(out)) problems.push("输出里没有「桌面壳」独立核查那行");
+      return problems;
+    },
+  },
+];
+
+/** 宿主安装目录（只用来给 preflight 递 --host；没有就跳过那条并计数）。 */
+function smokeHostDir() {
+  try {
+    const anchor = installAnchor();
+    if (anchor.desktop) {
+      const app = path.join(anchor.anchor, "resources", "app");
+      if (fs.existsSync(path.join(app, "dsh", "node_modules", "@deepseek-ai"))) return app;
+      if (fs.existsSync(path.join(app, "node_modules", "@deepseek-ai"))) return app;
+    }
+  } catch {
+    /* ignore */
+  }
+  return "";
+}
+
+function checkCommandSmoke(root) {
+  const problems = [];
+  const notes = [];
+  const ran = [];
+  const skipped = [];
+  const hostApp = smokeHostDir();
+  for (const cmd of SMOKE_COMMANDS) {
+    const scriptPath = path.join(root, cmd.rel);
+    if (!fs.existsSync(scriptPath)) {
+      skipped.push(cmd.id + "（脚本不在库里：" + cmd.rel + "）");
+      continue;
+    }
+    // 有同名文件不等于有这个命令：测试用的最小文档树里也放着 scripts/preflight-upgrade.mjs
+    // （那是给 dshTarget 锚点用的桩）。缺签名串就当"这个库里没有这条命令"，跳过并计数。
+    const scriptText = fs.readFileSync(scriptPath, "utf8");
+    if (cmd.signature && !cmd.signature.test(scriptText)) {
+      skipped.push(cmd.id + "（" + cmd.rel + " 缺签名串，不是本仓库的脚本）");
+      continue;
+    }
+    let argv = [...cmd.argv];
+    if (cmd.needsHost) {
+      if (!hostApp) {
+        skipped.push(cmd.id + "（没有宿主可递 --host）");
+        continue;
+      }
+      argv = [...argv, "--host", hostApp];
+    }
+    const env = { ...process.env };
+    // 冒烟要证明"不带 DSH_SURFACE 也认得出来"，所以显式清掉它（别让跑门禁的人的环境替它作答）。
+    delete env.DSH_SURFACE;
+    const res = spawnSync(process.execPath, [scriptPath, ...argv], {
+      cwd: root, encoding: "utf8", timeout: 300000, env,
+    });
+    const out = String(res.stdout || "") + String(res.stderr || "");
+    const code = res.status;
+    if (code !== 0 && !(cmd.id === "preflight" && code === 2)) {
+      problems.push(cmd.id + " 退出码 " + code + "（预期 0" + (cmd.id === "preflight" ? " 或 2（有失配）" : "") + "）：" + out.trim().split(/\r?\n/).slice(-3).join(" / "));
+      continue;
+    }
+    for (const line of cmd.check(out)) problems.push(cmd.id + ": " + line);
+    ran.push(cmd.id);
+  }
+  const scope = "跑到 " + ran.length + " 条" + (ran.length ? "（" + ran.join(" / ") + "）" : "") +
+    (skipped.length ? "；跳过 " + skipped.length + " 条：" + skipped.join("；") : "");
+  if (!problems.length) notes.push("命令冒烟：" + scope);
+  for (const id of skipped) notes.push("跳过 " + id);
+  return { problems, notes, skipped };
 }
 
 export const CLASS_TITLES = [
@@ -315,19 +573,25 @@ export const CLASS_TITLES = [
   { id: 4, title: "用例数" },
   { id: 5, title: "行号引用可解析" },
   { id: 6, title: "禁用词（含「上游」）" },
+  { id: 7, title: "命令冒烟（--status / --check-deps / --dry-run）" },
 ];
 
 export function runChecks(root, { tests } = {}) {
-  const docs = listDocs(root);
+  const { docs, missing, byKind } = listDocsDetailed(root);
+  const coverage = [];
+  for (const rel of missing) coverage.push("清单里有但磁盘上没有（warn）：" + rel);
   const results = [
-    { ...CLASS_TITLES[0], ...checkVersions(root) },
-    { ...CLASS_TITLES[1], ...checkHost(root) },
-    { ...CLASS_TITLES[2], ...checkPatchCount(root, docs) },
-    { ...CLASS_TITLES[3], ...checkCaseCount(root, docs, tests) },
-    { ...CLASS_TITLES[4], ...checkLineRefs(root, docs) },
-    { ...CLASS_TITLES[5], ...checkBannedWords(docs) },
+    { ...CLASS_TITLES[0], ...checkVersions(root), warns: [] },
+    { ...CLASS_TITLES[1], ...checkHost(root), warns: [] },
+    { ...CLASS_TITLES[2], ...checkPatchCount(root, docs, byKind) },
+    { ...CLASS_TITLES[3], ...checkCaseCount(root, docs, tests, byKind) },
+    { ...CLASS_TITLES[4], ...checkLineRefs(root, docs, byKind) },
+    { ...CLASS_TITLES[5], ...checkBannedWords(docs, byKind) },
+    { ...CLASS_TITLES[6], ...checkCommandSmoke(root) },
   ];
   for (const r of results) r.ok = r.problems.length === 0;
+  if (coverage.length) results[0].warns = (results[0].warns || []).concat(coverage);
+  results.coverage = { byKind, missing };
   return results;
 }
 
@@ -373,8 +637,13 @@ function main() {
   }
   console.log("");
   console.log("root=" + root);
+  const cov = results.coverage || { byKind: {} };
+  console.log("扫描集=" + (coverageText(cov.byKind) || "(空)"));
   if (!redClasses) {
+    // 「六类全绿」这句被 handbook/README 与两版 README 逐字引用，保持原文不动；
+    // 第 7 类是新增的，另起一行说清它跑到了什么。
     console.log("六类全绿。");
+    console.log("（第 7 类命令冒烟同样通过：" + ((results[6].notes || []).find((n) => n.startsWith("命令冒烟")) || "无输出") + "）");
     return 0;
   }
   console.log("六类里 " + redClasses + " 类红，共 " + redItems + " 处。");

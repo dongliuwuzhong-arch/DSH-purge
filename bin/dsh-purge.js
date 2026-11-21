@@ -3,13 +3,44 @@
 import * as core from "../lib/core.js";
 import * as rules from "../lib/rules.js";
 import * as runtimeSync from "../lib/runtime-sync.js";
+import * as surface from "../lib/surface.js";
 
 const args = process.argv.slice(2);
+
+/**
+ * surface 定档（V15 收 · 文档审计 S1-1）。
+ *
+ * 纯 node 进程里 process.execPath 是 node.exe，detectSurface() 一律判 web；而 web 的插件根
+ * 探测明确排除桌面安装路径 → CLI 上永远"插件根未找到"，提示的 DSH_BASE 也指不到本机唯一的
+ * 那棵宿主。这里按"显式 --surface > DSH_SURFACE > 安装锚点"定档，再落回 env，
+ * 让后续所有 detectSurface() 调用（包括 gatherState 内部）看到同一个值。
+ */
+function resolveSurfaceArgs() {
+  const idx = args.findIndex((a) => a === "--surface");
+  let forced = "";
+  if (idx >= 0) forced = String(args[idx + 1] || "").trim().toLowerCase();
+  const fromFlag = surface.SURFACES.includes(forced) ? forced : "";
+  if (fromFlag) {
+    process.env.DSH_SURFACE = fromFlag;
+    return { surface: fromFlag, via: "--surface " + fromFlag, anchor: "" };
+  }
+  const env = String(process.env.DSH_SURFACE || "").trim().toLowerCase();
+  if (env) return { surface: env, via: "DSH_SURFACE", anchor: "" };
+  const anchor = surface.installAnchor();
+  if (anchor.desktop) {
+    process.env.DSH_SURFACE = "desktop";
+    return { surface: "desktop", via: "安装锚点 / install anchor", anchor: anchor.anchor };
+  }
+  return { surface: "web", via: "进程身份 / argv", anchor: "" };
+}
+
+let surfaceInfo = { surface: "", via: "", anchor: "" };
 
 function printStatus(state) {
   const out = [];
   out.push("dsh-purge 状态 / Status");
-  out.push("  宿主 / surface " + (state.surface || "web"));
+  out.push("  宿主 / surface " + (state.surface || "web") + (surfaceInfo.via ? "（判据 / via: " + surfaceInfo.via + "）" : ""));
+  if (surfaceInfo.anchor) out.push("  安装锚点       " + surfaceInfo.anchor);
   out.push("  DSH_HOME      " + state.dsh_home);
   if (state.desktop_install) out.push("  桌面安装       " + state.desktop_install);
   if (state.ai_base) {
@@ -62,7 +93,11 @@ function printStatus(state) {
     }
   } else {
     // 没定位到宿主插件根时 patch_status 是空的：逐条印 undefined 只会让人以为补丁全丢了。
-    out.push("  补丁 / patches  未定位宿主插件根，逐条状态未知（设 DSH_BASE 后重试）");
+    // 而且**别说"设 DSH_BASE"**：桌面宿主上 DSH_BASE 指向安装树内的 @deepseek-ai 会被
+    // findAiBaseWeb 的 isInsideDesktopInstall 明确排除，那句话把人引到死路上（S1-1 实测）。
+    out.push("  补丁 / patches  未定位宿主插件根，逐条状态未知");
+    out.push("      桌面宿主：dsh-purge --status --surface desktop（或 DSH_SURFACE=desktop）");
+    out.push("      web 宿主：把 DSH_BASE 指到含 dsh-agent-instructions/lib 的 @deepseek-ai 目录");
   }
   out.push("");
   out.push(`  shim: dsh.cmd=${state.shim_cmd}  dsh.ps1=${state.shim_ps1}  dsh=${state.shim_bin}`);
@@ -80,10 +115,16 @@ async function main() {
   dsh-purge --uninstall  卸载插件（已应用则先还原）
   dsh-purge --sync       把源码同步到 profile 里的运行副本
   dsh-purge --edit       编辑注入文件 prompt-inject.md
-  dsh-purge --help       帮助`);
+  dsh-purge --help       帮助
+
+通用开关:
+  --surface <desktop|web>  强制宿主面（等价于 DSH_SURFACE=<值>）
+  不给 --surface 时的判定顺序：DSH_SURFACE → 进程身份 → 安装锚点
+  （<DSH_HOME>/dsh-purge/desktop-install.txt 里记的那份桌面安装）`);
     return;
   }
 
+  surfaceInfo = resolveSurfaceArgs();
   const state = await core.gatherState();
   console.log(printStatus(state));
   console.log("");

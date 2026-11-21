@@ -11,7 +11,7 @@
 | 当前插件版 | 1.5.0 |
 | 宿主基线（定版） | DSH 0.2.2-rc.5 |
 | 补丁表 | 77 条，最大 id 105（另有 4 条在存档区，不参与计数） |
-| 测试 | 306 例 |
+| 测试 | 340 例 |
 | 源码来源 | [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 1.1.71（fork 点，只管版权与出身） |
 | 本仓库 | [dongliuwuzhong-arch/DSH-purge](https://github.com/dongliuwuzhong-arch/DSH-purge) |
 
@@ -35,7 +35,8 @@
 > 官方桌面版把宿主代码封在 `resources\app.asar` 里，而补丁只能写进解开的 `resources\app\`。
 > Electron 的解析顺序是 `app.asar` → `app` → `default_app.asar`，**asar 在就永远轮不到目录**。
 >
-> 判据只有一条：看状态里还有没有 `✗ app.asar: 还在` 那一行——有这行就是全在空转。
+> 判据只有一条：看状态里还有没有 `app.asar` 那一行——出现「还在。补丁写在解开目录，当前进程读不到」就是全在空转。
+> （更硬的一条在 `check-paths`：第一行必须说「宿主读的是解包目录」。）
 > 1.2.1 起升级后的自愈是自动的；机制与处置见 [handbook/04](docs/zh/handbook/04-宿主换包与解包态.md)，机制长文在 [history/SEALED-ASAR.md](docs/zh/history/SEALED-ASAR.md)。
 
 ## 四道门：改完必须全绿
@@ -63,9 +64,11 @@ node scripts/install-offline.mjs --profile desktop --dsh-home "$HOME/.dsh"
 node scripts/install-offline.mjs --verify --profile desktop --dsh-home "$HOME/.dsh"
 ```
 
-看到什么算对：`--dry-run` 打出它将写的每一个路径且不落盘；正式跑完 `--verify` 退出码 0，`$DSH_HOME/profiles/desktop/node_modules/dsh-purge` 存在。
+看到什么算对：`--dry-run` 打出五行 `[dry-run]`（source / target / profile / would-copy / would-write）且不落盘；正式跑完打 `installed dsh-purge@<版本>` 加后面五行。
 
-它做五件事：校验包 → 复制到 `$DSH_HOME/plugins/dsh-purge` → 改 profile 的 `package.json` → 建 `node_modules/dsh-purge` 链接 → 写 `desktop-install.txt`。**不跑 pnpm、不 Apply、不重启。**
+`--verify` 只核一件事：`realpath(node_modules/dsh-purge) == realpath(plugins/dsh-purge)`。所以**只有安装器建的那种 junction 才退 0**；对着实体副本（`--sync` 铺出来的那份）它必抛 `node_modules link points elsewhere` 并退 1——那是判据本身，不是装坏了。实体副本改判 `node scripts/sync-runtime.mjs`（「全部同步」）+ `check-paths.mjs`（「源与副本一致」）。
+
+它做五件事：校验包 → 复制到 `$DSH_HOME/plugins/dsh-purge` → 改 profile 的 `package.json` → 建 `node_modules/dsh-purge` 的 junction → 写 `desktop-install.txt`。**不跑 pnpm、不 Apply、不重启。**
 
 也可以直接装压缩包：
 
@@ -108,11 +111,11 @@ New-Item -ItemType Junction -Path "$env:USERPROFILE\.dsh\profiles\desktop\node_m
 | 位置 | 放什么 |
 | --- | --- |
 | `docs/zh/handbook/` | **运维手册**：装、验、日常、备份、回滚、换宿主包、人格注入、故障处置、速查卡 |
-| `docs/zh/deep-dive/` | **原理**：[补丁表](docs/zh/deep-dive/01-补丁表.md) / [判据与状态机](docs/zh/deep-dive/02-判据与状态机.md) / [工程与发版](docs/zh/deep-dive/03-工程与发版.md) |
+| `docs/zh/deep-dive/` | **原理**：[补丁表](docs/zh/deep-dive/01-补丁表.md) / [判据与状态机](docs/zh/deep-dive/02-判据与状态机.md) / [工程与发版](docs/zh/deep-dive/03-工程与发版.md) / [补丁清单 77 条逐条](docs/zh/deep-dive/04-补丁清单.md) / [web 面](docs/zh/deep-dive/05-web面.md) |
 | `docs/zh/history/` | **存档**：9 篇审计、0.2.1 兼容攻坚、密封 asar 长文、旧补丁表。**数字全部过期** |
 | `lib/` | 插件实现：`patches.js`（主表）/ `patches-legacy.js`（存档区）/ `core.js`（判据与读写）/ `sealed-heal.js`（自愈判定） |
 | `scripts/` | 门与工具：`assert-*` 四道门、`preflight-upgrade.mjs`、`install-offline.mjs` |
-| `test/` | 46 个测试文件 / 306 例 |
+| `test/` | 52 个测试文件 / 340 例 |
 
 ## 三条会真坏事的教训（写在这里，免得翻 CHANGELOG）
 
@@ -130,7 +133,7 @@ New-Item -ItemType Junction -Path "$env:USERPROFILE\.dsh\profiles\desktop\node_m
 - `net-scope-allow.txt` —— 自己的服务器名单
 - `dsh-purge/` —— 插件状态、备份索引、`exclude-patches.json`、`asar-swap.json`（换包台账）
 
-插件源码在 `$DSH_HOME/plugins/dsh-purge`。profile 的 `node_modules/dsh-purge` 是安装时的副本，不是源码链接——改了源码要 `dsh-purge --sync` 或重装才会进运行副本。
+插件源码在 `$DSH_HOME/plugins/dsh-purge`。profile 的 `node_modules/dsh-purge` 有两种形态：**junction**（离线安装器建的）或**实体副本**（`--sync` 往实体目录里铺）。`--verify` 只认前者，对着实体副本必退 1——这类现场用 `sync-runtime` + `check-paths` 判。改了源码要 `dsh-purge --sync` 或重装才会进运行副本。
 
 ## 来源与许可
 

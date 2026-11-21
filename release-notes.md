@@ -1,12 +1,15 @@
-# 1.5.0
+# 1.5.1
 
-破甲自 dsh-purge 1.1.71 分出后独立维护：宿主定版在 0.2.2-rc.5，补丁表、判据与文档只服务这一棵树，不再跟随任何外部发行节奏（出处：YuJunZhiXue/dsh-purge 1.1.71，MIT）。
+1.5.0 的两路收尾审计（文档 / GitHub 代码 / 人格仓）查出 11 个 S1 与 3 个中危，本版全修。补丁表仍 77 条；测试 306 → 340。
 
-- **补丁表 88 → 77**：删 7 条死补丁、冷存 4 条进 `lib/patches-legacy.js`、把审计误判的 3 条搬回；修 #101 标签、#62 死标记、#24 判据、#105 非数组兜底。
-- **换包不再无限杀进程**：持久台账 + 3 次阈值 → `NEEDS_MANUAL_APPLY`；失败也把 DSH 拉起来；改名失败原因落盘。
-- **真缺陷**：`install-offline` 的探测起点掺了 `process.cwd()`，会把"任意含同名 exe 的目录"当现网安装写进 `desktop-install.txt`。
-- **soul-guard 校验真正注入的字节**（此前校验的是 md，运行时用的是 asset-table 槽，差 100 个 `\r` 却一直绿）。
-- 新增 `assert-versions`、`assert-docs` 两道门；`dshTarget` 改 rc.5；包里不再带 `docs/notice` 截图与本机预检基线。
-- 文档整体重写为三册：handbook（运维手册）/ deep-dive（原理）/ history（存档）。
+- **`--status` 在纯 node 下不能用了**：`detectSurface()` 判成 web 而 `findAiBaseWeb` 排除桌面安装路径 → 永远「插件根未找到」，提示的 `DSH_BASE` 也是死路。
+  现在按 `--surface` > `DSH_SURFACE` > 安装锚点定档，裸跑即认桌面宿主。
+- **%VAR% 未展开被当真路径**：某个已脱敏的 `%SystemDrive%` 段被当目录，往 cwd 写出 `%SystemDrive%/ProgramData/...`。新增 `lib/path-guard.js` 接入 13 处候选入口。
+- **`install-offline --verify` 对实体副本必红**（要求 node_modules 链接）：改成链接/副本两套判据，本机 exit 1 → 0。
+- 仓库卫生：`_tmp/` 不再入库也不再进包（.gitignore + export-ignore + zip 断言黑名单）。
+- `patchShim` 返回值统一成 `no_backup:<msg>`。
+- `assert-docs` 补第 7 类「命令冒烟」（真跑 --status / --check-deps / preflight --dry-run 并断言判据串），递归覆盖 handbook/deep-dive/history。
+- 文档：`--status` 两分口径、`--verify` 判据、解包判据、`patched/suspect` 假判据串、cmd-in-bash 六处、02 现状快照、占位符定义表全部改齐；
+  新增 `deep-dive/04-补丁清单.md`（77 条逐条）与 `deep-dive/05-web面.md`。
 
-补丁表 77 条；测试 233 → 306。
+补丁表 77 条；测试 340 例。

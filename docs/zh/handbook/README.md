@@ -55,14 +55,14 @@
 ```bash
 node scripts/assert-patches.mjs      # 表自洽吗（条数 / id 唯一 / 与 CHANGELOG 声明一致）
 node scripts/assert-soul-guard.mjs   # 人格注入与 14 条关键补丁没被顺手改
-node bin/dsh-purge.js --status       # 逐条终态、备份账目、运行副本
+node bin/dsh-purge.js --status     # 逐条终态、备份账目、运行副本（自己按安装锚点定档）
 ```
 
 看到什么算对：
 
 - 第一条末行 `✓ 补丁表自检通过`，退出码 0。
 - 第二条 `soul-guard ok` 且 digest 与 `soul-guard.lock` 里的一致。
-- 第三条有 `补丁 N/M 已清洗`、`0 待清洗`、备份缺口里没有「已带补丁痕迹」后缀的行。
+- 第三条第二行应是 `surface desktop（判据 / via: 安装锚点）`，并打出 `补丁 N/M 已清洗`、`0 待清洗`、备份缺口里没有「已带补丁痕迹」后缀的行。若它显示 `surface web` + 「插件根未找到」，说明安装锚点没写，加 `--surface desktop` 应急（理由见 02 §一）。
 
 ---
 
@@ -82,7 +82,7 @@ node bin/dsh-purge.js --status       # 逐条终态、备份账目、运行副�
 
 ## 旧文档的归宿
 
-1.5 之前那一篇 1183 行的 `00-maintenance.md`（旧路径 `../00-maintenance.md`，待删）被拆成这八篇。对应关系：
+1.5 之前那一篇 1183 行的 `docs/zh/00-maintenance.md` **已经删了**（1.5 删的，仓库里没有残留，也不再留指针页），内容拆成这八篇。对应关系：
 
 | 旧篇的节 | 现在在哪 |
 | --- | --- |

@@ -30,6 +30,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveLiteralPath } from "../lib/path-guard.js";
 
 import {
   ALL_PATCHES, applyReplacementsToText, patchFileOutcome, patchStatus, readExcludePatches, targetFiles,
@@ -48,6 +49,7 @@ function parseArgs(argv) {
     const a = argv[i];
     if (a === "--host" || a === "--ai") out[a.slice(2)] = argv[++i];
     else if (a === "--json") out.json = true;
+    else if (a === "--dry-run") out.dryRun = true;
     else if (a === "--save-baseline") out.saveBaseline = true;
     else if (a === "--strict-missing") out.strictMissing = true;
     else if (a === "--help" || a === "-h") out.help = true;
@@ -486,6 +488,7 @@ const HELP = [
   "",
   "选项:",
   "  --json            机器可读输出（含五个桶的计数、漂移 id、退出码）",
+  "  --dry-run         只读干跑（本脚本默认就不写文件；显式写出来是为了让脚本能被机械调用）",
   "  --save-baseline   把这棵树的 applied/skipped 记进 scripts/preflight-baseline.json，然后退 0",
   "  --strict-missing  让 missing（目标文件不在这棵树里）也参与判定",
   "",
@@ -507,13 +510,32 @@ async function main() {
     console.log(HELP);
     return 0;
   }
-  const host = args.host ? path.resolve(args.host) : "";
-  const aiBase = args.ai ? path.resolve(args.ai) : host ? resolveAiBase(host) : "";
+  // F3：--host / --ai 里带没展开的 %VAR%（文档写的就是 %INSTALL_DIR% 这种占位符）时不是路径，
+  // 当路径用会在 cwd 底下造出同名目录。宁可按"用法错误"退 1，也别静默改成 cwd 相对路径。
+  const guardPath = (value, label) => {
+    if (!value) return "";
+    const verdict = resolveLiteralPath(value, { cwd: "" });
+    if (verdict.rejected) {
+      console.error(label + " 不能用：" + verdict.reason);
+      return "";
+    }
+    return verdict.path;
+  };
+  const hostArg = args.host ? guardPath(args.host, "--host") : "";
+  const aiArg = args.ai ? guardPath(args.ai, "--ai") : "";
+  if (args.host && !hostArg) return 1;
+  if (args.ai && !aiArg) return 1;
+  const host = hostArg;
+  const aiBase = aiArg || host ? aiArg || (host ? resolveAiBase(host) : "") : "";
   if (!aiBase || !fs.existsSync(aiBase)) {
     console.error("找不到 @deepseek-ai 目录。用 --host <resources\\app> 或 --ai <...node_modules/@deepseek-ai>");
     return 1;
   }
   const pkg = readJson(path.join(REPO, "package.json")) ?? {};
+  if (args.dryRun && args.saveBaseline) {
+    console.error("--dry-run 与 --save-baseline 互斥：干跑不写基线。");
+    return 1;
+  }
   const versions = host ? hostVersions(host) : { shell: "", runtime: "" };
   const status = await patchStatus(aiBase);
   const files = targetFiles(aiBase);

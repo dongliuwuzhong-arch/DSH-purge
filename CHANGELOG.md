@@ -1,14 +1,34 @@
 # 更新日志
 
-本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.2-rc.3 兼容变体**（另在 0.2.1-rc.3 / 0.2.2-rc.1 / rc.2 上做过影子验证）。
-上游以 MIT 发布，仍在维护（发版到 1.1.81，`dshTarget: 0.2.0-rc.2`）；本分支跟的是 0.2.2-rc.3。
+本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的分支（fork 点 1.1.71，MIT 许可）；**自 1.5.0 起按自己的节奏维护，宿主锁在 0.2.2-rc.5**。
+
+- 宿主基线只有一个：`package.json` 的 `dshTarget`。要换包走 `docs/zh/handbook/04-宿主换包与解包态.md`，不追任何外部发行节奏。
+- 旧版本（0.2.1-rc.3 / 0.2.2-rc.1 / rc.2 / rc.3）上做过影子验证，过程留档在 `docs/zh/history/`——**那里的数字全部过期**，只当证据看，不当现状。
+
+## 1.5.1 · 2026-11-22 · 两路收尾审计后的修复
+
+**本版：补丁表 77 条；测试 340 例。**
+
+### 文档与代码收口
+
+第二轮的文档审计（S1 六条 / S2 九条）修完，改动只落在 `docs/` 与两版 README。补丁表 77 条不变；用例随本轮新增的路径守卫收敛到 340 例。
+
+- **`--status` 的正确姿势（S1-1）**：CLI 现在自己定档——`--surface <web|desktop>` > `DSH_SURFACE` > 安装锚点（`desktop-install.txt` / `DSH_DESKTOP_INSTALL`），裸跑就是 desktop 面；锚点丢了才回落到 web「插件根未找到」。而 `preflight-upgrade` 与手写探针**不**自己定档，仍须 `DSH_SURFACE=desktop`——不带会报 3 条假漂移（#47 #49 #57），照它去重锚会改坏三条本来好好的锚；`DSH_BASE` 那句旧提示对桌面安装永远无效。新增 `docs/zh/deep-dive/05-web面.md` 专门讲两面的差别。
+- **`install-offline --verify` 的判据**写成它真实的样子：只核 `realpath(node_modules/dsh-purge) == realpath(plugins/dsh-purge)`，所以实体副本必退 1。README 两版与 handbook/01 同步。
+- **判据串换成实有输出**：`check-bak-judge` 的真字段是 `会刷新 / 判为已打补丁(跳过) / 备份==现网 / 用户 patch 层 / 读失败`，此前四篇里写的 `patched 0 / suspect 0` 在这个脚本里根本不存在；`--dry-run` 是五行不是四行；解包树 `resources/app/dsh` 只有三项。
+- **现状快照重采**：运行副本已是 1.5.0（不是 1.4.4）；停在 1.4.4 的是应用戳 `applied.json`；唯一的结构性红是底座 `0.2.2-rc.1`。
+- **cmd 语法搬出 bash 围栏**：`echo %DSH_HOME%` / `type` / `findstr … | more` 共 6 处换成 PowerShell 围栏或 bash 等价写法（`cat` / `grep`）。
+- **`00-maintenance.md` 的三处叙述改对**：文件 1.5 已删、也不留指针页；`assert-docs` 的宿主基线锚本来就是候选列表（取 `handbook/00`），不会因为它不在而变红。
+- **发布件占位符有了定义表**：`%INSTALL_DIR%` / `%USERPROFILE%` / `%WORKSPACE%` / `%DSH_HOME%` 的对照表在 `docs/zh/README.md`。
+- **新增 `docs/zh/deep-dive/04-补丁清单.md`**：77 条逐条一行（id / 层 / 干什么 / 目标键 / 判据位 / 本机终态），由脚本生成、可一键重采。
+- **S2 数字类**：丙类正则锚 4 → 3（#40 在存档区）、#24 落地率 1/4 → 4/4、#35 锚 23 行 → 693 字符 / 9 行、桌面壳 6 → 5 条、CI 语法段没有 `checked=` 这种字段（真输出是 `语法检查 41 个文件` + `脚本语法检查 9 个`）。
 
 ## 1.5.0 · 2026-11-22 · 定位转向：宿主定版
 
 宿主定版在 **0.2.2-rc.5**（本机 11-21 完成换包，读的是解包目录）。从这一版起，破甲按自己的节奏维护：
 补丁表、判据与文档只服务这一棵树，不再跟随任何外部发行节奏（出处：YuJunZhiXue/dsh-purge 1.1.71，MIT）。
 
-**本版：补丁表 77 条；测试 306 例。**（上一版 88 条）
+**本版：补丁表 77 条；测试 340 例。**（上一版 88 条；1.5.0 发版时是 306，1.5.1 的路径守卫用例把它推到 340）
 
 ### 补丁表：88 → 77
 
@@ -49,6 +69,7 @@
 
 - #40 的 7 条锚在 rc.5 的 `dsh-system-prompt/lib/index.js` 上逐条 false，判定"1.5 起不再影响人格注入"，与 #76 一并移出 SOUL-GUARD 清单；
   按规矩显式重写 `soul-guard.lock`（digest `a889ae52cd2e`）；注入源与槽的指纹重写前后一致。
+
 
 ## 1.4.4 · 2026-11-21 · 审计台账"仍开放"的四条收口
 
@@ -1790,7 +1811,7 @@ afterCloser **不能**用来判断这个改动。它量的是 </project_instruct
 - **1325282** 是 GitHub Release 页上 v1.1.79-dsh 那个 **zip** 附件的大小；
 - **1278285** 是本地 `pnpm pack` 出来的 **tgz**。
 
-zip 与 tgz 是两种压缩格式，拿它们相减，差出来的 48 KB 里混着格式差异，看不出 `"!lib/*.bak*"` 到底省了多少。更麻烦的是**方向也反了**：1.1.80 实际发出去的 zip 是 **1331350** 字节，比 1.1.79 的 1325282 **大** 6068 字节（因为多了 1.1.80 自己的文档与 CHANGELOG），读者拿着 Release 页的数字对照文档，会以为文档在瞎写。
+zip 与 tgz 是两种压缩格式，拿它们相减，差出来的 48 KB 里混着格式差异，看不出 `"!lib/*.bak*"` 到底省了多少。更麻烦的是**方向也反了**：1.1.80 实际发出去的 zip 是 **1332450** 字节，比 1.1.79 的 1325282 **大** 6068 字节（因为多了 1.1.80 自己的文档与 CHANGELOG），读者拿着 Release 页的数字对照文档，会以为文档在瞎写。
 
 **干净对照**（本轮实跑，同一份 1.1.81 源码，只动 `files` 里一行）：
 

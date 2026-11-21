@@ -24,6 +24,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import * as desktop from "../lib/desktop.js";
+import { hasVarToken, resolveLiteralPath } from "../lib/path-guard.js";
 
 const ROOT = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 const args = process.argv.slice(2);
@@ -37,6 +38,22 @@ function arg(name, fallback = "") {
 function fail(message) {
   console.error(`[dsh-purge-install] ${message}`);
   process.exitCode = 1;
+}
+
+/**
+ * 命令行给的路径（V15 收 · F3）：含没展开的 %VAR% / $env: 时不是路径，直接拒绝。
+ * 以前它会被 fs.cpSync / fs.symlinkSync 当成"cwd 下的相对目录"，于是写出一个名字就叫
+ * `%INSTALL_DIR%` 的目录（实测：ProgramData 缓存被整棵复制进去）。宁可报错，别猜。
+ */
+function pathArg(value, label) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const verdict = resolveLiteralPath(raw, { cwd: "" });
+  if (verdict.rejected) {
+    fail(`${label} 不能用：${verdict.reason}`);
+    return "";
+  }
+  return verdict.path;
 }
 
 function readJson(file) {
@@ -204,6 +221,18 @@ export function normalizeDir(dir) {
   return n === "." ? "" : n;
 }
 
+/**
+ * normalizeDir + 占位符判定（F3）：带 %VAR% / $env: 的串不是一个可用的安装目录。
+ * 这里连"环境里能展开"的也不放过 —— 这个返回值会被拿去跟现网目录比同一棵树，
+ * 而 fs 不会替我们展开环境变量，展开出来的那个位置未必真的是用户指的那份安装。
+ */
+export function usableInstallDir(dir) {
+  const raw = String(dir || "").trim();
+  if (!raw) return "";
+  if (hasVarToken(raw)) return "";
+  return normalizeDir(raw);
+}
+
 /** 同一个安装树：相等、或一方在另一方里面（盘符根不算）。 */
 export function sameOrNested(a, b) {
   const x = normalizeDir(a).toLowerCase();
@@ -308,40 +337,112 @@ export function guardRefusalLines({ detected = "", reason = "", liveDir = "", ds
   return lines;
 }
 
+/** 一份 dsh-purge 目录该有的东西（src 与运行副本都按这套核）。 */
+const REQUIRED_PLUGIN_FILES = ["cordis.patch.yml", "lib/index.js", "lib/core.js", "client.js"];
+
+function pluginPackageAt(dir, label) {
+  const file = path.join(dir, "package.json");
+  if (!isFile(file)) throw new Error(`${label} package.json missing: ${file}`);
+  const pkg = readJson(file);
+  if (pkg.name !== "dsh-purge") throw new Error(`${label} unexpected package name: ${pkg.name}`);
+  const missing = REQUIRED_PLUGIN_FILES.filter((rel) => !isFile(path.join(dir, rel)));
+  if (missing.length) throw new Error(`${label} 缺文件 / missing files: ${missing.join(", ")}`);
+  return pkg;
+}
+
+/**
+ * --verify（V15 收 · 文档审计 S1-2）。
+ *
+ * 病：以前只认"链接"这一种形态，要求 realpath(node_modules/dsh-purge) === realpath(plugins/dsh-purge)。
+ * 而同一套文档自己写着"profile 里的 node_modules/dsh-purge 是安装期**副本**，不是链接"——
+ * 于是在实体副本的机器上 --verify 必红，红的原因（"link points elsewhere"）还指向一个不存在的
+ * 错误。现在两种形态都认，并且分别说清：
+ *   · 链接（junction / symlink）：指向别处才是真错 —— 那就红；
+ *   · 实体副本：核对它自己是一份完整、可用的 dsh-purge（名字 / 版本 / 必需文件），通过；
+ *     版本与源码不一致时打一行提示（那是 sync-runtime 的事，不是装坏了）。
+ */
 async function verify(profileDir, pluginDir) {
   const packageFile = path.join(profileDir, "package.json");
   const pkg = readJson(packageFile);
-  const pluginPkgFile = path.join(pluginDir, "package.json");
-  if (!isFile(pluginPkgFile)) throw new Error(`plugin package.json missing: ${pluginPkgFile}`);
-  const pluginPkg = readJson(pluginPkgFile);
-  if (pluginPkg.name !== "dsh-purge") throw new Error(`unexpected package name: ${pluginPkg.name}`);
-  if (!isFile(path.join(pluginDir, "cordis.patch.yml"))) throw new Error("cordis.patch.yml missing");
-  if (!isFile(path.join(pluginDir, "lib", "index.js"))) throw new Error("lib/index.js missing");
-  if (!isFile(path.join(pluginDir, "client.js"))) throw new Error("client.js missing");
+  const pluginPkg = pluginPackageAt(pluginDir, "plugin");
   if (pkg.dependencies?.["dsh-purge"] !== "file:../../plugins/dsh-purge") {
     throw new Error("profile package.json dependency is not file:../../plugins/dsh-purge");
   }
   if (!pkg.dsh?.profile?.bundles?.includes("dsh-purge")) {
     throw new Error("profile bundles does not include dsh-purge");
   }
-  const linkPath = path.join(profileDir, "node_modules", "dsh-purge");
-  const linkReal = fs.realpathSync.native(linkPath);
-  const pluginReal = fs.realpathSync.native(pluginDir);
-  if (linkReal.toLowerCase() !== pluginReal.toLowerCase()) {
-    throw new Error(`node_modules link points elsewhere: ${linkReal}`);
+  const modulePath = path.join(profileDir, "node_modules", "dsh-purge");
+  if (!exists(modulePath)) throw new Error(`node_modules/dsh-purge 不存在 / missing: ${modulePath}`);
+  const stat = fs.lstatSync(modulePath);
+  let mode = "copy";
+  let detail = "";
+  let copiedVersion = pluginPkg.version;
+  if (stat.isSymbolicLink()) {
+    mode = "link";
+    const linkReal = fs.realpathSync.native(modulePath);
+    const pluginReal = fs.realpathSync.native(pluginDir);
+    if (linkReal.toLowerCase() !== pluginReal.toLowerCase()) {
+      throw new Error(`链接指向别处 / link points elsewhere: ${linkReal}（应为 ${pluginReal}）`);
+    }
+    detail = linkReal;
+  } else if (stat.isDirectory()) {
+    const copied = pluginPackageAt(modulePath, "运行副本 / runtime copy");
+    copiedVersion = String(copied.version || "");
+    detail = pluginPkg.version === copiedVersion
+      ? "与源码同版本 " + copiedVersion
+      : `副本 ${copiedVersion}，源码 ${pluginPkg.version}（跑 node scripts/sync-runtime.mjs --apply 对齐；没对齐不影响 --verify 的判定）`;
+  } else {
+    throw new Error(`node_modules/dsh-purge 既不是链接也不是目录: ${modulePath}`);
   }
   await import(pathToFileURL(path.join(pluginDir, "lib", "index.js")).href);
-  return pluginPkg.version;
+  return { version: pluginPkg.version, mode, path: modulePath, detail, profileDir, pluginDir };
+}
+
+/**
+ * --check-deps：只读自检（V15 收 · 断言第 7 类"命令冒烟"要有一个不需要宿主的只读子命令）。
+ * 只看"这套源码能不能被装"：必需文件在不在、profile 认不认、node_modules 是什么形态。
+ * 不探测桌面安装、不读注册表、不写任何文件。
+ */
+function checkDeps({ dshHome, profileDir, pluginDir }) {
+  const lines = ["[dsh-purge-install] check-deps"];
+  const problems = [];
+  lines.push("  node    " + process.version);
+  let version = "?";
+  try {
+    const pkg = readJson(path.join(ROOT, "package.json"));
+    version = String(pkg.version || "?");
+  } catch {
+    problems.push("读不到 package.json");
+  }
+  lines.push("  source  " + ROOT + " (" + version + ")");
+  const missing = REQUIRED_PLUGIN_FILES.filter((rel) => !isFile(path.join(ROOT, rel)));
+  if (missing.length) problems.push("缺文件 / missing: " + missing.join(", "));
+  lines.push("  files   " + (missing.length ? "缺 " + missing.length + " 个：" + missing.join(", ") : "ok"));
+  lines.push("  dsh-home " + dshHome + (fs.existsSync(dshHome) ? "" : "（不存在，装的时候会创建）"));
+  lines.push("  profile " + (isFile(path.join(profileDir, "package.json")) ? "有 / found" : "没有 package.json（先装一次）") + ": " + profileDir);
+  const modulePath = path.join(profileDir, "node_modules", "dsh-purge");
+  let kind = "missing";
+  try {
+    const stat = fs.lstatSync(modulePath);
+    kind = stat.isSymbolicLink() ? "link" : stat.isDirectory() ? "copy" : "other";
+  } catch {
+    kind = "missing";
+  }
+  lines.push("  node_modules " + kind + ": " + modulePath);
+  lines.push("  result  " + (problems.length ? "fail: " + problems.join("; ") : "ok"));
+  return { ok: problems.length === 0, lines };
 }
 
 const HELP_TEXT = [
   "用法: node scripts/install-offline.mjs [--dsh-home <dir>] [--profile <name>] [--source <dir>|--zip <zip>]",
-  "       [--desktop-install <dir>] [--allow-live] [--dry-run] [--force] [--verify] [--uninstall [--purge]]",
+  "       [--desktop-install <dir>] [--allow-live] [--dry-run] [--force] [--verify] [--check-deps] [--uninstall [--purge]]",
   "",
   "--desktop-install <dir>  记下这次要认领的桌面安装目录（不传则自动探测，探测结果可能是现网）",
   "--allow-live             明确允许认领现网那份安装（护栏默认拒绝）",
   "--dry-run                只打印，不落盘",
-  "--verify / --uninstall   校验 / 卸载（--uninstall 可加 --purge 连插件目录一起删）",
+  "--verify                 校验装得对不对（链接与实体副本两种形态都认）",
+  "--check-deps             只读自检：必需文件 / profile / node_modules 形态，不碰宿主",
+  "--uninstall              卸载（可加 --purge 连插件目录一起删）",
   "",
   "沙箱护栏：自动探测到的目录若等于现网（或现网目录解析不出来），而目标 DSH_HOME 又不是现网的，",
   "一律拒绝并打印该目录；退出码 1。这是为了防止沙箱安装把现网 exe 写进 desktop-install.txt。",
@@ -352,17 +453,30 @@ async function main() {
     console.log(HELP_TEXT);
     return;
   }
-  const mode = flags.has("--verify") ? "verify" : flags.has("--uninstall") ? "uninstall" : "install";
+  const mode = flags.has("--verify") ? "verify" : flags.has("--check-deps") ? "check-deps" : flags.has("--uninstall") ? "uninstall" : "install";
   const dryRun = flags.has("--dry-run");
   const force = flags.has("--force");
   const profileName = arg("--profile", "desktop");
-  const dshHome = path.resolve(arg("--dsh-home") || process.env.DSH_HOME || path.join(os.homedir(), ".dsh"));
+  const dshHomeRaw = pathArg(arg("--dsh-home") || process.env.DSH_HOME || "", "--dsh-home/DSH_HOME");
+  if (!dshHomeRaw && (arg("--dsh-home") || process.env.DSH_HOME)) return;
+  const dshHome = dshHomeRaw || path.join(os.homedir(), ".dsh");
   const profileDir = path.join(dshHome, "profiles", profileName);
   const pluginDir = path.join(dshHome, "plugins", "dsh-purge");
 
+  if (mode === "check-deps") {
+    const report = checkDeps({ dshHome, profileDir, pluginDir });
+    for (const line of report.lines) console.log(line);
+    if (!report.ok) process.exitCode = 1;
+    return;
+  }
+
   if (mode === "verify") {
-    const version = await verify(profileDir, pluginDir);
-    console.log(`[dsh-purge-install] verified ${pluginDir} (${version})`);
+    const info = await verify(profileDir, pluginDir);
+    const modeText = info.mode === "link" ? "链接 / link → " + info.detail : "实体副本 / copy（" + info.detail + "）";
+    console.log(`[dsh-purge-install] verified ${info.version}`);
+    console.log(`[dsh-purge-install] plugin: ${info.pluginDir}`);
+    console.log(`[dsh-purge-install] profile: ${info.profileDir}`);
+    console.log(`[dsh-purge-install] node_modules: ${modeText}`);
     return;
   }
 
@@ -387,8 +501,11 @@ async function main() {
     return;
   }
 
-  const zipFile = arg("--zip");
-  let source = path.resolve(arg("--source") || ROOT);
+  const zipFile = pathArg(arg("--zip"), "--zip");
+  if (arg("--zip") && !zipFile) return;
+  const sourceArg = pathArg(arg("--source"), "--source");
+  if (arg("--source") && !sourceArg) return;
+  let source = sourceArg || ROOT;
   let temp = "";
   try {
     if (zipFile) {
@@ -402,7 +519,7 @@ async function main() {
 
     const sourcePkg = readJson(path.join(source, "package.json"));
     const { packageFile, pkg, changed } = ensureProfile(profileDir);
-    const explicitDesktop = normalizeDir(arg("--desktop-install"));
+    const explicitDesktop = usableInstallDir(arg("--desktop-install"));
     let desktopInstall = explicitDesktop;
     if (!explicitDesktop) {
       // 自动探测会捞到"现网正在用的那份"（S4 实测返回 %INSTALL_DIR%\DeepSeek Harness.exe），

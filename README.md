@@ -11,7 +11,7 @@ Derived from [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 1
 | Plugin version | 1.5.0 |
 | Host baseline (pinned) | DSH 0.2.2-rc.5 |
 | Patch table | 77 patches, max id 105 (plus 4 archived entries outside the count) |
-| Tests | 306 tests |
+| Tests | 340 tests |
 | Source (fork point) | [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 1.1.71 — credited for origin only, not a reference point |
 | This repository | [dongliuwuzhong-arch/DSH-purge](https://github.com/dongliuwuzhong-arch/DSH-purge) |
 
@@ -34,7 +34,7 @@ Derived from [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 1
 >
 > The official desktop build seals host code in `resources\app.asar`, while patches can only be written into the unpacked `resources\app\`. Electron resolves `app.asar` → `app` → `default_app.asar`, so **while the asar exists the directory is never reached**.
 >
-> The only check that matters: does status still print `✗ app.asar: still present`? That line means everything is idle.
+> The only check that matters: does status still print an `app.asar` line saying 「还在。补丁写在解开目录，当前进程读不到」? That line means everything is idle. (The panel strings are Chinese-only; the harder check is `check-paths.mjs` — its first line must say 「宿主读的是解包目录」.)
 > Self-heal after an upgrade has been automatic since 1.2.1 — see [handbook/04](docs/zh/handbook/04-宿主换包与解包态.md) (Chinese) and the mechanism essay in [history/SEALED-ASAR.md](docs/zh/history/SEALED-ASAR.md).
 
 ## Four gates — all must be green before you commit
@@ -62,7 +62,7 @@ node scripts/install-offline.mjs --profile desktop --dsh-home "$HOME/.dsh"
 node scripts/install-offline.mjs --verify --profile desktop --dsh-home "$HOME/.dsh"
 ```
 
-What correct looks like: `--dry-run` prints every path it would write and changes nothing; the real run followed by `--verify` exits 0 and `$DSH_HOME/profiles/desktop/node_modules/dsh-purge` exists.
+What correct looks like: `--dry-run` prints five `[dry-run]` lines (source / target / profile / would-copy / would-write) and changes nothing; the real run prints `installed dsh-purge@<version>` and the five following lines. `--verify` checks exactly one thing — `realpath(node_modules/dsh-purge) == realpath(plugins/dsh-purge)` — so it exits 0 only for the junction form the installer creates; against a real copy (`--sync` on that directory) it exits 1 with `node_modules link points elsewhere`, and that is the criterion, not a broken install. Verify a real copy with `correct = node scripts/sync-runtime.mjs` → `全部同步` plus `check-paths.mjs` → `源与副本一致`.
 
 It does five things: validate the package, copy to `$DSH_HOME/plugins/dsh-purge`, update the profile `package.json`, link `node_modules/dsh-purge`, write `desktop-install.txt`. It does **not** run pnpm, Apply, or restart the host.
 
@@ -99,11 +99,11 @@ What correct looks like: the dock button appears, and `/purge status` prints the
 | Path | Contents |
 | --- | --- |
 | `docs/zh/handbook/` | Operations manual: install, verify, daily checks, backup, revert, host swap, persona injection, troubleshooting, one-page runbook |
-| `docs/zh/deep-dive/` | Mechanism: [patch table](docs/zh/deep-dive/01-补丁表.md), [judgments and state machine](docs/zh/deep-dive/02-判据与状态机.md), [engineering and release](docs/zh/deep-dive/03-工程与发版.md) |
+| `docs/zh/deep-dive/` | Mechanism: [patch table](docs/zh/deep-dive/01-补丁表.md), [judgments and state machine](docs/zh/deep-dive/02-判据与状态机.md), [engineering and release](docs/zh/deep-dive/03-工程与发版.md), [per-patch inventory (77 rows)](docs/zh/deep-dive/04-补丁清单.md), [the web surface](docs/zh/deep-dive/05-web面.md) |
 | `docs/zh/history/` | Archive: nine audits, the 0.2.1 compatibility effort, the sealed-asar essay, the old patch doc. **Every number there is expired** |
 | `lib/` | Implementation: `patches.js` (main table), `patches-legacy.js` (archive), `core.js` (judgments and IO), `sealed-heal.js` (self-heal decision) |
 | `scripts/` | Gates and tools: four `assert-*` gates, `preflight-upgrade.mjs`, `install-offline.mjs` |
-| `test/` | 46 test files, 306 tests |
+| `test/` | 52 test files, 340 tests |
 
 ## Three lessons that actually bite
 
@@ -115,7 +115,7 @@ What correct looks like: the dock button appears, and `/purge status` prints the
 
 Runtime files under `$DSH_HOME`: `prompt-inject.md`, `rules/`, `skills/`, `net-scope-allow.txt`, `dsh-purge/` (plugin state, backup index, `exclude-patches.json`, `asar-swap.json`).
 
-Plugin source lives at `$DSH_HOME/plugins/dsh-purge`; a profile's `node_modules/dsh-purge` is an install-time copy, not a link — run `dsh-purge --sync` or reinstall after editing source.
+Plugin source lives at `$DSH_HOME/plugins/dsh-purge`; a profile's `node_modules/dsh-purge` is either a junction (created by the offline installer) or a real copy (`--sync` fills a real directory). With a real copy, `--verify` exits 1 by design — judge it with `sync-runtime` + `check-paths` instead.
 
 ## Source and license
 
