@@ -24,6 +24,22 @@ jobs:
           # `git rev-parse refs/tags/vX.Y.Z` 永远为假，永远走 --target 那条路。
           fetch-tags: true
 
+      # 全篇原先没有 setup-node：node 版本 = runner 镜像的默认版本，随镜像漂移。
+      # 而 `node --test` 认 glob 是 Node 22 才进 runner 的（A9 首要嫌疑）。
+      # 钉死大版本 22，门禁不再取决于跑在哪个镜像上。
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # 把实际版本打进日志与 Summary：以后排查"换个镜像就红"只需要看这一行。
+      - name: Node toolchain
+        run: |
+          set -euo pipefail
+          node -v
+          npm -v
+          echo "- [x] node $(node -v) / npm $(npm -v)" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Syntax-check plugin entry
         # 逐个文件列名字会漏：新加的 lib/*.js 不写进来就等于没检查。
         # 改成扫全量，保证 lib/ 与 bin/ 下每个文件都被 --check 过。
@@ -33,13 +49,17 @@ jobs:
           mark() { echo "- [x] $1" >> "$GITHUB_STEP_SUMMARY"; }
           fail() { echo "- [ ] **$1**" >> "$GITHUB_STEP_SUMMARY"; echo "::error::$1"; exit 1; }
           echo '## 门禁进度' >> "$GITHUB_STEP_SUMMARY"
-          set -e
-          n=0
-          for f in lib/*.js lib/*.mjs bin/*.js client.js; do
+          set -euo pipefail
+          # bash 默认没有 nullglob：任一 glob 无匹配，字面量 `lib/*.mjs` 会被喂给
+          # node --check 然后立刻红，且红得看不出原因。nullglob + 计数断言两头都堵。
+          shopt -s nullglob
+          files=(lib/*.js lib/*.mjs bin/*.js bin/*.mjs)
+          [ "${#files[@]}" -gt 0 ] || fail "lib/ 与 bin/ 下一个文件都没匹配到"
+          files+=(client.js)
+          for f in "${files[@]}"; do
             node --check "$f" || fail "node --check 失败: $f"
-            n=$((n+1))
           done
-          mark "语法检查 $n 个文件"
+          mark "语法检查 ${#files[@]} 个文件"
           node --check scripts/assert-patches.mjs || fail "node --check assert-patches.mjs"
           node --check scripts/assert-soul-guard.mjs || fail "node --check assert-soul-guard.mjs"
           node --input-type=module -e "import './lib/index.js'" || fail "import lib/index.js 失败"
@@ -49,7 +69,14 @@ jobs:
 
       - name: Unit tests
         run: |
-          if ! node --test "test/**/*.test.mjs" > gate.log 2>&1; then
+          set -euo pipefail
+          node -v
+          # 门禁的 glob 交给 shell 展开（这里不加引号）：Node 收到的是 34 个具体文件，
+          # 与 Node 版本无关。原来写成 "test/*.test.mjs"，引号让 shell 不展开，只剩
+          # Node 自己的 glob——那是 22+ 才有的，换镜像就红。
+          # 也别改成目录参数 `node --test test/`：实测 v24.21/v24.22 上 runner
+          # 会把目录当测试文件，直接报 Cannot find module ...\test。
+          if ! node --test test/*.test.mjs > gate.log 2>&1; then
             echo '- [ ] **单元测试失败**' >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
             tail -40 gate.log >> "$GITHUB_STEP_SUMMARY"
@@ -75,7 +102,7 @@ jobs:
           echo "$out"
           echo "- [x] Soul guard" >> "$GITHUB_STEP_SUMMARY"
 
-      # Publish 拆成三段具名步骤：以前是一整块 run，失败时 annotation 只指向
+      # Publish 拆成具名步骤：以前是一整块 run，失败时 annotation 只指向
       # 「.github 第 N 行 exit 1」，看不出红在哪一步。拆开后失败会精确落在步骤名上。
       - name: Publish / resolve version
         id: ver
@@ -155,8 +182,56 @@ jobs:
             echo "$out"
           fi
 
-          if ! out=$(gh release upload "$tag" "$zip" --clobber 2>&1); then
-            report_fail "gh release upload 失败" "$out"
+      # upload 单独一步：它有自己的硬失败语义（upload 静默不落地 = 空壳 release），
+      # 所以这里开 set -euo pipefail，并把要传的文件、字节数、sha256 全打进日志。
+      - name: Publish / upload asset
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          version="${{ steps.ver.outputs.version }}"
+          tag="v${version}"
+          zip="dsh-purge-${version}.zip"
+          echo "tag=$tag"
+          echo "zip=$zip"
+          test -f "$zip" || { echo "::error::打包产物 $zip 不存在"; exit 1; }
+          echo "bytes=$(wc -c < "$zip")"
+          sha256sum "$zip" || true
+          echo "running: gh release upload $tag $zip --clobber"
+          gh release upload "$tag" "$zip" --clobber
+          echo "- [x] upload $zip" >> "$GITHUB_STEP_SUMMARY"
+
+      # 空壳 release 不许静默成功：create 成功 + upload 不落地 = 有页面、0 资产。
+      # 1.2.1 就是这么废的（83e84e5），1.4.0 / 1.4.1 两次又长得一模一样（A9）。
+      - name: Publish / verify asset
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          version="${{ steps.ver.outputs.version }}"
+          tag="v${version}"
+          zip="dsh-purge-${version}.zip"
+          if ! names="$(gh release view "$tag" --json assets --jq '.assets[].name' 2>&1)"; then
+            echo '- [ ] **gh release view --json assets 失败**' >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::gh release view $tag --json assets 失败: $names"
+            exit 1
           fi
-          echo "$out"
+          count=0
+          while IFS= read -r line; do
+            [ -n "$line" ] || continue
+            echo "  asset: $line"
+            count=$((count+1))
+          done <<< "$names"
+          echo "assets=$count"
+          if [ "$count" -lt 1 ]; then
+            echo '### 空壳 release：资产 0 个' >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::$tag 建出来了但资产 0 个——upload 没落地（空壳 release，1.2.1 的指纹）"
+            exit 1
+          fi
+          if ! printf '%s\n' "$names" | grep -qxF "$zip"; then
+            echo '### 资产里没有本次的 zip' >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::$tag 有 $count 个资产，但没有 $zip"
+            exit 1
+          fi
+          echo "- [x] 资产核对：$count 个，含 $zip" >> "$GITHUB_STEP_SUMMARY"
           echo "published https://github.com/${{ github.repository }}/releases/tag/${tag}"

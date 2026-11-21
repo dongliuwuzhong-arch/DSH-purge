@@ -23,7 +23,7 @@
 | 看剪枝到底走哪条轨 | `node tools/check-pruner.mjs` | 「剪枝可用，4 处预设已接上」 |
 | 确认补丁表没被改坏 | `node scripts/assert-patches.mjs` | `✓ 补丁表自检通过` |
 | 确认注入正文和关键补丁没被顺手改 | `node scripts/assert-soul-guard.mjs` | `soul-guard ok …（digest …）` |
-| 确认代码没退化 | `node --test "test/*.test.mjs"` | `tests 194 / pass 194 / fail 0` |
+| 确认代码没退化 | `node --test test/*.test.mjs` | `tests 217 / pass 217 / fail 0` |
 | 决定要不要换包 | `node scripts/preflight-upgrade.mjs --host "<候选树>"` | 退出码 0 + 「相对基线无漂移」 |
 
 五条铁律，用来解释后面所有内容：
@@ -120,7 +120,7 @@ node scripts/preflight-upgrade.mjs --host "<安装目录>/resources/app"
 | `node tools/check-pruner.mjs` | 剪枝走的是原始实现还是 #19 禁用态？四处预设阈值是多少？ | 0 = 可用 | <2s |
 | `node scripts/assert-patches.mjs` | 补丁表自身还自洽吗（条数 / id 唯一 / 与 CHANGELOG 声明一致）？ | 0 / 1 | <1s |
 | `node scripts/assert-soul-guard.mjs` | 注入正文和 16 条关键补丁有没有被人"顺手改"？ | 0 / 1 | <1s |
-| `node --test "test/*.test.mjs"` | 代码有没有退化？ | 0 / 1 | ~3s（194 例） |
+| `node --test test/*.test.mjs` | 代码有没有退化？ | 0 / 1 | ~2.6s（226 例） |
 | `node scripts/preflight-upgrade.mjs --host <树>` | 候选宿主树上哪些补丁贴得上、哪些锚点失效？ | 0 / 2 / 1 | 5~20s |
 
 `tools/check-paths.mjs` 和 `tools/check-pruner.mjs` **不在本仓库**，是本机运维脚本（随工作区走）；其余四条都在 `scripts/` 下。
@@ -239,14 +239,16 @@ node scripts/assert-soul-guard.mjs --update    # 会改 soul-guard.lock
 ### 2.6 全量测试
 
 ```bash
-node --test "test/*.test.mjs"    # 必须带 glob
+node --test test/*.test.mjs    # 不能加引号，让 shell 展开
 ```
 
-**[实测]**：`tests 194 / pass 194 / fail 0`。
+**[实测]**：`tests 217 / pass 217 / fail 0`。
+
+> ⚠ 这两个数是 **1.4.2 定版口径**。谁加用例，谁顺手把这里、两份 README 和 `docs/zh/README.md` 的数字一起改：树里的用例数大于这个数，先怀疑"忘了改文档"，别怀疑测试坏了（1.4.2 的用例已经进树，见 `lib/patches.js:975`）。
 
 三个必须知道的点：
 
-1. **一定要带 glob。** 裸跑 `node --test` 会让 Node 递归扫目录；这版 Node 某些情况下还直接报 `Cannot find module ...\test`。
+1. **一定要带 glob，而且不能加引号。** 裸跑 `node --test` 会让 Node 递归扫目录；目录参数也不行——`node --test test/` 在 v24.21 实测报 `Cannot find module ...\test`。写成 `"test/*.test.mjs"` 则是把通配符原样交给 Node，只有 Node 22+ 认（CI 已用 setup-node 钉 22，但门禁不该只靠它）。
 2. **别在 `test/` 下面留副本。** 1.4.0 删掉了 11-06 的陈旧副本 `test/test/`——它让裸跑变成 156 例、11 红，而 CI 是绿的（那个目录从没进版本库）。谁按直觉敲 `node --test`，谁就去追 11 个不存在的失败。
 3. **绿了不等于真机上贴得上。** 有 7 个补丁用例把宿主源码抄进了测试，另有一条测的是手抄的复刻实现（`clean-gate.test.mjs`）。要验"真贴得上"，只有预检 + 链式干跑（6.3）。
 
@@ -296,7 +298,7 @@ cd "<插件根>"
 node scripts/sync-runtime.mjs                    # 0. 源/副本一致？
 node scripts/assert-patches.mjs                  # 1. 表自洽？
 node scripts/assert-soul-guard.mjs               # 2. 提示词层没被动？
-node --test "test/*.test.mjs"                     # 3. 代码没退化？
+node --test test/*.test.mjs                       # 3. 代码没退化？
 node scripts/check-bak-judge.mjs "<宿主插件根>"    # 4. 备份判据正常？
 cd "<工作区>" && node tools/check-paths.mjs        # 5. 树对不对？
 node tools/check-pruner.mjs                       # 6. 剪枝哪条轨？
@@ -317,18 +319,24 @@ node scripts/preflight-upgrade.mjs --host "<安装目录>/resources/app"   # 8. 
 ### 3.1 两级判定：先单文件，再收成一条补丁
 
 ```
-patchStatus(aiBase, patches, options)               lib/core.js（导出）
+patchStatus(aiBase, patches, options)               lib/core.js:4469（导出，六桶字符串）
+                                                                   = collectPatchStatus().status（:4524，一趟算两套口径）
 ├─ withoutExcluded(patches, dshHome)               被排除的 id 直接不进表（effectivePatchIds）
 ├─ patchAppliesHere(p, surface)                    宿主面不匹配 → "na"
 └─ for 每个目标文件:
-     patchFileOutcome(text, p, fp)
-     ├─ filePatchSettled(text, p, fp)
+     patchFileOutcomeDetail(text, p, fp)           lib/core.js:4097（明细口径，比字符串多一档 satisfied）
+     ├─ ① satisfiedBy 命中 且 没有非幂等残留        → patchApplied ? "applied" : "satisfied"
+     │    satisfiedBy 命中 但还有非幂等残留         → "pending"      ← 只降级不升级（A10 §3.1 反例 A）
+     ├─ ② filePatchSettled(text, p, fp)            lib/core.js:4028
      │   ├─ patchApplied(text, p)                  markers / markersAny / marker / replace 首行 60 字
-     │   │   └─ markerLooksUpstream(marker, p)      带 dsh-purge 字样的 marker 才计票（1.4.0）
+     │   │   ├─ markerLooksUpstream(marker, p)      带 dsh-purge 字样的 marker 才计票（1.4.0）
+     │   │   └─ 产物兜底：replacement 前 160 字在场 且 没活可干（S1/A4）
      │   └─ isLayoutSoftPatch(p) → !patchHasRemainingWork(...)
-     ├─ 结算了 → staleActionableReplacement(...) ? "pending" : "applied"
-     └─ 没结算 → patchHasRemainingWork(...) ? "pending" : "skipped"
-   收成一条：pending > applied > unmatched > skipped > (na | missing_file)
+     ├─ 结算了 → staleActionableReplacement(...)（lib/core.js:4040）? "pending" : "applied"
+     └─ ③ 没结算 → patchHasRemainingWork(...) ? "pending" : "skipped"
+     patchFileOutcome(text, p, fp)                 lib/core.js:4126：satisfied 折回 "applied"（字符串口径不变）
+   收成一条（lib/core.js:4571-4584）：六桶 pending > applied > unmatched > skipped > (na | missing_file)
+                                    明细 pending > applied > satisfied > unmatched > skipped > (na | missing_file)
 ```
 
 四个判据函数的差别，一句话记住：
@@ -344,13 +352,39 @@ patchStatus(aiBase, patches, options)               lib/core.js（导出）
 
 | 终态 | 怎么判出来的 | 该紧张吗 |
 | --- | --- | --- |
-| `applied` | 结算了，且没有非幂等的活剩下 | 不紧张。但要抽查 `grep -c "dsh-purge" <文件>` 非 0——也有"假绿"（3.6 红线二） |
+| `applied` | ① 结算了且没有非幂等的活剩下；② 产物兜底；③ 明细口径里的 `satisfied` **折回**进来 | 不紧张，但**先分清它后面是 applied 还是 satisfied**（见 3.2.1）：同一个格子里混着「我们写了痕迹」和「本来就没事可做」两件事 |
 | `pending` | 没结算但原文还改得动；**或**结算了但还有残留 | 换包后正常；没换包就是异常（见 3.3） |
 | `skipped` | 没结算、而且原文也改不动 | **分五种，见 3.4**。非 optional 的 skipped 是红线 |
 | `unmatched` | 补丁带 `strictFiles`，原文逐字对不上 | 紧张：这条是"必须逐字匹配"的，失配意味着宿主改了这段 |
 | `na` | `patchAppliesHere()` 为假（宿主面不同），或 `optional` 且一个目标都没解析到 | 不紧张，但 **na 的数量会随宿主版本变**，别把它当常量 |
 | `missing_file` | 非 `optional`，且一个目标都没解析到 | 看情况：真缺文件（第三方包没装）正常；文件在却报 missing → 6.4 假漂移 |
 | （`excluded`） | 不在表里——被 `exclude-patches.json` 排掉 | 不紧张，前提是四入口都遵守（1.4.0 起才真的都遵守） |
+
+### 3.2.1 `applied` 只说"这个文件上没活可干"，不说"痕迹在场"
+
+同一句 `applied` 后面有两种事实，**明细口径**已经把它们分开（`patchFileOutcomeDetail` / `patchStatusDetail`，`core.js:4097` / `:4610`）：
+
+| 单文件 state | 含义 | 文件里能找到什么 |
+| --- | --- | --- |
+| `applied` | 结算了，或产物兜底成立 | 我们写下的痕迹 / 痕迹被改写后的产物 |
+| `satisfied` | 出厂原文本来就达标，**我们一条痕迹都没写**（A10 §3.1 反例 W；现网仅 #24 的出厂 preset） | 0 条本条补丁的痕迹 |
+| `pending` | 还有活要干——含 satisfiedBy 命中、但还剩非幂等 replacement（A10 反例 A） | — |
+
+怎么看，别写反：
+
+- **字符串口径把 `satisfied` 折回 `applied`**（`patchFileOutcome`，`core.js:4126-4129`；六桶汇聚 `core.js:4571-4584`）。
+  预检、面板、`--status` 今天看到的都是折回后的 `applied`，**只看字符串分不出这两档**，要看 `patchStatusDetail()` 的 `details[id].state`。
+- 折回是刻意留的向后兼容：`scripts/preflight-upgrade.mjs:298` 把未知值当 `missing`，`lib/index.js:202` / `bin/dsh-purge.js:53`
+  把未知值渲染成 `·`——出界消费方还不认识第五档，字符串口径要等它们跟上。
+- **痕迹账本是 `landedMarkers` / `declaredMarkers`，不是终态。** [实测] 现网 #24：`details[24] = {state:"applied", landedMarkers:1, declaredMarkers:4}`
+  —— 四个目标文件里只有 liangshen 那份落了 1 条痕迹，另外三份出厂 preset（standard / cordis / ptc）**一条都没落地**。
+  A10 记的"0/1"是**文件级**口径，这里是补丁级累加，两个数都对。
+- **`applied` ≠ `grep -c "dsh-purge" <文件>` 非 0**：#24 的出厂 preset 文件里本来就有 3 处 `dsh-purge` 字样，全部来自 #42
+  —— 文件级 grep 在 #24 上查不出问题，只能回到补丁级落地率。
+- `satisfiedBy` 现在**只降级不升级**，needle 也锚死了 `- id: tool-web` 三行（`lib/patches.js:978-984`，1.4.2 起）：
+  A10 §3.1 反例 A（同一文件还留着 0 缩进 `fetch: false`）报 `pending`，反例 B（无关工具也写 `fetch: true`）不再被认。
+- 布局软补丁（标识行 / 审批句 / `softSettle`）**不要求 marker**，只看"没活可干"（`core.js:4031`）。
+- 结论：`applied` 与 `satisfied` 都只说明**"这条现在不用点应用"**，都不能当成"已经改到宿主里了"——后者要落地率加后端行为一起证明。
 
 ### 3.3 `pending` 是二义的
 
@@ -406,6 +440,8 @@ f="<宿主插件根>/dsh-agent-instructions/lib/index.js"; grep -c "dsh-purge" "
 ```
 
 0 → 这条是"marker 取自上游原句"造成的假绿。1.4.0 加了 `markerLooksUpstream`（只有带 `dsh-purge` 字样的 marker 才计票）修了 #2 #3 #24 #50 那批，新出现同类就补 marker。
+⚠ 这道红线只在**文件级痕迹为 0** 时报警。#24 的三份出厂 preset 是它的反例：文件里那 3 处 `dsh-purge` 字样来自 #42，
+而本条补丁自己一条痕迹都没有（`markersWritten` 0/1）。**要按补丁级痕迹核，查 `patchWrittenMarkers()` 的命中率**，见 3.2.1。
 
 **红线三：`backupGap` 里 `patched` 或 `suspect` 非空。**
 
@@ -976,9 +1012,9 @@ node scripts/preflight-upgrade.mjs --host "<安装目录>/resources/app"
 
 **⑨　测试裸跑 156 例、11 红**
 
-- 判据：红全部落在 `test/test/` 下；`node --test "test/*.test.mjs"` 却全绿。
+- 判据：红全部落在 `test/test/` 下；`node --test test/*.test.mjs` 却全绿。
 - 病因：那里曾有一份 11-06 的旧断言副本（不在版本库里，所以 CI 绿、本机红）。1.4.0 已删除。
-- 处置：带 glob 跑；若 `test/test/` 又出现（有人从备份恢复），直接移走，别去修那 11 个"失败"。
+- 处置：带（不加引号的）glob 跑；若 `test/test/` 又出现（有人从备份恢复），直接移走，别去修那 11 个"失败"。
 - 变体：`node --test` 报 `Cannot find module ...\test` → 也是这个原因，这版 Node 不认目录参数。
 
 **⑩　预检退 2**
@@ -1002,7 +1038,7 @@ node scripts/preflight-upgrade.mjs --host "<安装目录>/resources/app"
 cd "<插件根>"
 node scripts/assert-patches.mjs        # 1. 条数 / id / name / file / CHANGELOG 对账
 node scripts/assert-soul-guard.mjs     # 2. 动到 16 条关键补丁会在这里红（见下）
-node --test "test/*.test.mjs"          # 3. 194 例
+node --test test/*.test.mjs            # 3. 226 例
 node scripts/sync-runtime.mjs --apply  # 4. 同步运行副本
 node scripts/preflight-upgrade.mjs --host "<安装目录>/resources/app"   # 5. 现网树：必须仍 0 漂移
 node scripts/preflight-upgrade.mjs --host "<候选树>/resources/app"     # 6. 目标版本树：看新锚点命中
@@ -1020,7 +1056,7 @@ node scripts/preflight-upgrade.mjs --host "<候选树>/resources/app"     # 6. �
 判据函数（`patchFileOutcome` / `filePatchSettled` / `patchApplied` / `targetLooksPatched` / `staleActionableReplacement`）不在 soul-guard 的指纹里，所以它们**只能靠测试和预检保护**。
 
 ```bash
-node --test "test/*.test.mjs"                                        # 1. 全量
+node --test test/*.test.mjs                                          # 1. 全量
 # 2. 真树上贴一遍（不落盘）：见 6.3 的链式干跑
 node scripts/preflight-upgrade.mjs --host "<安装目录>/resources/app"   # 3. 现网树仍 0 漂移 = 判据没被改坏
 node scripts/check-bak-judge.mjs "<宿主插件根>"                        # 4. 备份判据没被改坏
@@ -1046,9 +1082,9 @@ node bin/dsh-purge.js --sync                         # 等价入口
 
 ```
 dsh-purge 运行副本同步 / runtime sync
-  源码 / source  <插件根>  (1.4.0)
+  源码 / source  <插件根>  (1.4.2)
   desktop  副本  <DSH_HOME>/profiles/desktop/node_modules/dsh-purge
-               版本 1.4.0  已同步
+               版本 1.4.2  已同步
 
   全部同步。
 ```
@@ -1069,11 +1105,11 @@ dsh-purge 运行副本同步 / runtime sync
 
 | 位置 | 例子 | 判据命令 |
 | --- | --- | --- |
-| `package.json` → `version` | `1.4.0` | `node -p "require('./package.json').version"` |
-| `package.json` → `dsh.version` | `1.4.0` | `node -p "require('./package.json').dsh.version"` |
+| `package.json` → `version` | `1.4.2` | `node -p "require('./package.json').version"` |
+| `package.json` → `dsh.version` | `1.4.2` | `node -p "require('./package.json').dsh.version"` |
 | `package.json` → `dshTarget` | `0.2.2-rc.3`（**宿主**版本，不是插件版本） | `node -p "require('./package.json').dshTarget"` |
-| `CHANGELOG.md` 最新小节标题 | `## 1.4.0 · 2026-11-16 · …` | `grep -n "^## " CHANGELOG.md`（取第一条） |
-| `release-notes.md` 首行 | `# 1.4.0` | `head -1 release-notes.md` |
+| `CHANGELOG.md` 最新小节标题 | `## 1.4.2 · 2026-11-16 · …` | `grep -n "^## " CHANGELOG.md`（取第一条） |
+| `release-notes.md` 首行 | `# 1.4.2` | `head -1 release-notes.md` |
 
 外加两处"会过期"的数字：`docs/zh/README.md` 的「一眼版本」和 `docs/zh/05-known-limits.md` 的「截至 x.y.z」。
 
@@ -1086,14 +1122,14 @@ grep -n "补丁表[　 ]*[0-9]*[　 ]*条" CHANGELOG.md | head -2
 node scripts/assert-patches.mjs     # 补丁条数声明对不上会直接红
 ```
 
-规矩：**`dshTarget` 只在"这版补丁真在目标宿主上验过"之后才改**。改了它，预检的"破甲基准 ✓ 一致 / ⚠ 不一致"那行才跟着变；不改它就一直是"⚠ 不一致，模式可能要重锚"——那是提示，不是失败（1.4.0 仍然写 rc.3，因为 rc.5 没装机实跑过）。
+规矩：**`dshTarget` 只在"这版补丁真在目标宿主上验过"之后才改**。改了它，预检的"破甲基准 ✓ 一致 / ⚠ 不一致"那行才跟着变；不改它就一直是"⚠ 不一致，模式可能要重锚"——那是提示，不是失败（1.4.1 仍然写 rc.3，因为 rc.5 没装机实跑过）。
 
 ### 8.5 提交前 checklist
 
 ```
 [ ] assert-patches 绿
 [ ] assert-soul-guard 绿（或已 --update 且 CHANGELOG 写了理由）
-[ ] node --test "test/*.test.mjs" 194 绿
+[ ] node --test test/*.test.mjs 217 绿
 [ ] sync-runtime 已同步
 [ ] 现网树预检 0 漂移
 [ ] 补丁表改了 → CHANGELOG 的"补丁表 N 条"那句话没被改坏
@@ -1110,7 +1146,8 @@ node scripts/assert-patches.mjs     # 补丁条数声明对不上会直接红
 | 树 / aiBase | 一个 `@deepseek-ai` 目录。宿主可能同时有安装树和 `dsh\node_modules` 镜像树 |
 | 解封 | 把 `app.asar` 挪开，让宿主读 `resources\app` 目录 |
 | 二段补丁 | 锚点由另一条补丁插入的补丁，pristine 树上必然 skipped |
-| 假绿 | 状态说 applied，文件里没有痕迹 |
+| 假绿 | 状态说 applied，文件里没有痕迹，也不是"本来就没事可做" |
+| satisfied（第五档） | 出厂原文本来就达标、本条补丁一个字节都没写（#24 的三份出厂 preset）。只出现在明细口径 `patchStatusDetail()` 的 `details[id].state` 里，字符串口径折回 `applied` |
 | 假漂移 | 预检说 missing / skipped，真机上其实正常（异树 / 分区守卫造成） |
 | 幽灵行 | 被 exclude 的补丁在面板上以"待贴 / 缺文件"出现，或分母对不上 |
 | 单腿绿 | 多目标补丁里一个目标打上、另一个根本没解析到，整条仍报 applied |
@@ -1123,7 +1160,7 @@ node scripts/assert-patches.mjs     # 补丁条数声明对不上会直接红
 账   → node scripts/check-bak-judge.mjs      patched / suspect 必须 0
 表   → node scripts/assert-patches.mjs       88 条 + changelog=88
 魂   → node scripts/assert-soul-guard.mjs    digest 不变
-码   → node --test "test/*.test.mjs"         194 绿
+码   → node --test test/*.test.mjs           217 绿
 预   → node scripts/preflight-upgrade.mjs    退出码 0 + 无漂移
 剪   → node tools/check-pruner.mjs           原始实现在线 + 4×32768
 人   → count-injections.mjs 5                份数 = 1

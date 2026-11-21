@@ -1,11 +1,30 @@
 # 更新日志
 
-本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.1-rc.2 / rc.3 兼容变体**。
-上游以 MIT 发布，仍在维护（发版到 1.1.81，`dshTarget: 0.2.0-rc.2`）；本分支跟的是 0.2.1-rc.3。
+本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.2-rc.3 兼容变体**（另在 0.2.1-rc.3 / 0.2.2-rc.1 / rc.2 上做过影子验证）。
+上游以 MIT 发布，仍在维护（发版到 1.1.81，`dshTarget: 0.2.0-rc.2`）；本分支跟的是 0.2.2-rc.3。
 
-## 1.4.1 · 2026-11-16 · 影子轮之后的三件事（rc.5 收尾 D1）
+## 1.4.2 · 2026-11-16 · 审计 A9/A10 后的四项优化
 
-补丁表 88 条未变；测试 194 → 217。起因是 `记录\影子-rc5-20261116.md` 的 §4 与 §5.3 三条。
+两位审计员（CI 根因 / 状态一致性）之后按批准的 1-4 项做完。补丁表仍 88 条；测试 217 → 226。
+
+1. **CI 出不了包**：`release.yml` 没有 `actions/setup-node`，node 版本随 runner 镜像漂移，而门禁是 `node --test "test/**/*.test.mjs"`——
+   引号锁死 shell 不展开，认 glob 要 Node 22+。现在：钉 node 22、门禁去引号（`node --test test/*.test.mjs`，由 shell 展开，与版本无关）、
+   upload 拆成独立步骤并加 `set -euo pipefail`、**新增"资产必须存在"断言**（空壳 release 直接 exit 1）。
+   顺带：语法检查覆盖 `bin/*.mjs`（39→40 文件）、`nullglob` + 空匹配硬失败。
+   ⚠️ 实测纠正一个流传的说法：`node --test test/`（目录参数）在 v24 上是**红的**（把 test/ 当模块 require），所以不能那么写。
+2. **文书收口**：README 两处版本、CHANGELOG 两条 `## 1.4.1` 合并、测试基线 194→217 改 205→217、维护手册与 01-install 的测试数统一、
+   `applied` 与 `satisfied` 的语义在 00/02 里重写（新增 §3.2.1 与"markers 与 markersWritten 是两本账"）、行号全刷。
+3. **判定收窄**：`satisfiedBy`（#24）从"直接 return applied"改成"还有可执行 replacement 就 pending"；needle 锚到 `- id: tool-web` + `name` + `config:` 三行，
+   两个反例（出厂块+fetch:false 并存 / 无关工具同缩进写 fetch:true）都钉成测试。新增 `satisfied` 第五档与 `patchFileOutcomeDetail`/`patchStatusDetail`
+   （带 `landedMarkers/declaredMarkers` 落地率）；**字符串口径逐字节兼容**，六桶不变。
+   `scope:"none"` 改 fail-loud（`scopeError{code:2}`）；删掉零调用方的 `restoreMissingOriginalsAllHosts`（无条件全宿主扫描+写盘）。
+4. **配置收口**：`cordis.patch.yml` 根作用域那条不带 config 的 `tool-result-pruner`（默认 8192）补成 32768 三键；
+   `check-pruner.mjs` 现在能看见"无 config 的声明"，并输出阈值分层（温和档 ×N / 默认档 ×M）。
+
+## 1.4.1 · 2026-11-16 · 影子/沙箱轮之后的收尾（rc.5 收尾 D1）
+
+rc.5 上真跑过影子测试（离线 apply×2 + revert，61/61 sha1 全等）与沙箱测试（隔离安装 + 隔离 DSH_HOME 真启动），
+暴露的三类问题在本版收尾。补丁表 88 条未变；测试 205 → 217。起因是 `记录\影子-rc5-20261116.md` 的 §4 与 §5.3 三条。
 
 ### #24 PRESET_FETCH_ENABLED 在 rc.5 上从未落地
 
@@ -30,29 +49,16 @@
 ### applyPatchesAllHosts 会枚举到现网宿主
 
 7. 以前无条件 `enumeratePatchAiBases()`：沙箱里调用一次就把 `%INSTALL_DIR%` 也列进 hosts 去写（影子实测 60 次越界写被拦）。
-   现在默认只打 `options.aiBase` 明确传进来的那一棵；全宿主扫描必须显式 `{ allHosts: true }`。
-8. 五个调用点（`index.js` 四处 + `bin/dsh-purge.js` + `reapply.js` + `ensureHostClean`）显式开 `allHosts`，行为不变。
+   现在默认只打 `options.aiBase` 明确传进来的那一棵；全宿主扫描必须显式 `{ allHosts: true }`，`revertAllHosts` 同款。
+8. 七个调用点（`index.js` 四处 + `bin/dsh-purge.js:95` + `reapply.js:368` + `ensureHostClean`）显式开 `allHosts`，行为不变。
 9. 返回值多 `hostPaths` / `skippedHosts` / `scope` / `allHosts`，日志逐条打印每个宿主的路径与收尾计数；
    `enumerateHosts`（注入）与 `finishHost: false`（跳过宿主 bin 注入）给沙箱/测试留口子。
 
----
+### 一件杂项
 
-## 1.4.1 · 2026-11-16 · 影子/沙箱测试后的收尾
+10. `zstd` 之外：`revertAll` 不再留"字节相同"的等值 bak（clean 树上会剩 5 个）。
 
-rc.5 上真跑过影子测试（离线 apply×2 + revert，61/61 sha1 全等）与沙箱测试（隔离安装 + 隔离 DSH_HOME 真启动），
-测试暴露的三类问题在本版收尾。补丁表仍 88 条；测试 205 → 217。
-
-1. **#24 在出厂 preset 上从未真正生效**：唯一的 pattern 是 0 缩进 + `fetch: false`（那是 liangshen/用户 unrestricted 的形态），
-   而出厂 `presets/{standard,ptc,cordis}.patch.yml` 本来就是 `fetch: true`（10/12/14 缩进）→ 命中 0。
-   现网"已贴"一直是借 liangshen 那份的绿。新增"出厂整块"分支（`once` 幂等）+ `satisfiedBy` 判据。
-2. **四条"部分落地却报绿"全是 marker 声明错**：#62 / #100 / #101 / #102 声明的是改号前的别名或从未写入的文案。
-   新增 `markersWritten` 与 `patchWrittenMarkers()`：落地核对只认实际写入的标记；`markers` 与 `patchApplied` 一行没动
-   （#102 的 `skipIfMarked` 靠认旧标记防止在旧块上叠第二层）。
-3. **`applyPatchesAllHosts` 会枚举到现网宿主**（影子测试实测：把 `%INSTALL_DIR%` 也列进 hosts，60 次越界写被围栏拦下）。
-   现在默认只处理显式传入的 aiBase，全宿主扫描必须 `{ allHosts: true }`；`revertAllHosts` 同款。
-4. `zstd` 之外：`revertAll` 不再留"字节相同"的等值 bak（clean 树上会剩 5 个）。
-
-同时记录：rc.5 上 61 个目标文件、88 条补丁 applied 71 / already 5 / missing 7（沙箱缺 liangshen·hooks 路径）/
+**同时记录**：rc.5 上 61 个目标文件、88 条补丁 applied 71 / already 5 / missing 7（沙箱缺 liangshen·hooks 路径）/
 pattern_not_found 4（#21 #56 #77 #88，均为既有已知）；桌面壳 5 条全贴，与现网壳逐行 diff 只差版本字面量一行。
 
 ## 1.4.0 · 2026-11-16 · 六路审计后的修复 + rc.5 适配 + 升级护栏
@@ -117,6 +123,7 @@ pattern_not_found 4（#21 #56 #77 #88，均为既有已知）；桌面壳 5 条�
 - 不要剪枝 → 别排除，同时把预设里的 `tool-result-pruner` 子行撤掉，别留死配置
 
 留着一半的配置只会让自检长期报红，变成噪音。
+
 ## 1.3.7 · 2026-11-16 · 升级前预检 + 升级手册
 
 补丁表仍 88 条，测试 130 → 133。

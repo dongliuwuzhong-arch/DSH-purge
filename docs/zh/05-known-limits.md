@@ -1,20 +1,20 @@
-# 已知限制（截至 1.4.0）
+# 已知限制（截至 1.4.2）
 
 诚实清单。当前这台机器（Windows / 0.2.2-rc.3）不受影响，换环境就会咬人。
 
 ## 1. `missing_file` 的口径，以及"单腿绿"
 
-`targetFiles(aiBase)`（`lib/core.js:3258`）在现网 rc.3 树上解析出 **57 个键 / 60 个路径**（实测）：
+`targetFiles(aiBase)`（`lib/core.js:3422`）在现网 rc.3 树上解析出 **57 个键 / 60 个路径**（实测）：
 59 个落在 `@deepseek-ai` 下，1 个指向 `~/.dsh` 里的预设文件（`preset-liangshen-pkg`）。
 
-- 一个目标都解析不到、补丁又不是 `optional` → `missing_file`（`core.js:4260`）；`optional` 的落 `na`。
-- **现网实测 `missing_file = 0`**（applied 68 / na 15 / skipped 4 / 排除 1）。
+- 一个目标都解析不到、补丁又不是 `optional` → `missing_file`（`core.js:4512`）；`optional` 的落 `na`。
+- **现网实测 `missing_file = 0`**（applied 69 / na 15 / skipped 3 / 排除 1）。
 - 影子镜像上曾出现 2 条（#71 的目标在 `~/.dsh` 里、#83 在宿主进程外解析不到）；A6 复核时按
   "optional 应算 na"的口径又记成 7 条。**这个数字取决于镜像怎么拼，不要当常量抄**；
   A6 / A7 里"19 个裸键"与"13 个裸键"也是两套口径，同样别抄。
 
 真正的风险不在 `missing_file`，在**单腿绿**：多目标补丁里一个目标打上了、另一个目标压根解析不到，
-`patchStatus` 仍然报 `applied`（那一票 `missing` 不参与降级，`core.js:4256-4260`），面板看不出副目标从没被碰过。
+`patchStatus` 仍然报 `applied`（那一票 `missing` 不参与降级，`core.js:4508-4512`），面板看不出副目标从没被碰过。
 典型是 **`#5 / #9 / #12`** 的第二目标 `user-approval-invariant`：rc.3 的 `dsh-user-approval/lib`
 只有 `index.js` 与 `types/index.js`，没有 `invariant.js`，所以这三条现在是 applied（实测），
 但保住的只是主目标。

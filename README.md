@@ -1,13 +1,13 @@
 # dsh-purge
 
-**DSH 0.2.2-rc.3 compatibility fork · 1.3.8**
+**DSH 0.2.2-rc.3 compatibility fork · 1.4.2**
 
-> 📚 **Chinese docs: [docs/zh/README.md](docs/zh/README.md)** — install/upgrade, full patch table, backup & revert semantics, shadow-test method, known limits, audit reports (A1–A8).
+> 📚 **Chinese docs: [docs/zh/README.md](docs/zh/README.md)** — install/upgrade, full patch table, backup & revert semantics, shadow-test method, known limits, audit reports (A1–A8 + shadow-matrix summary).
 
 - Upstream: [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge)
 - This fork: [dongliuwuzhong-arch/DSH-purge](https://github.com/dongliuwuzhong-arch/DSH-purge)
 - Tested on: 0.2.1-rc.3 · 0.2.2-rc.1 · 0.2.2-rc.2 · 0.2.2-rc.3 (shadow install, four pristine trees)
-- Patch table: **88 patches**, 136 tests
+- Patch table: **88 patches**, 217 tests
 
 > 🔴 **Read this first: host patches need a precondition to take effect.**
 >
@@ -119,7 +119,7 @@ node scripts/install-offline.mjs --verify --profile desktop --dsh-home "$HOME/.d
 Or install directly from a zip:
 
 ```sh
-node scripts/install-offline.mjs --zip dsh-purge-1.3.8.zip --profile desktop --dsh-home "$HOME/.dsh"
+node scripts/install-offline.mjs --zip dsh-purge-1.4.2.zip --profile desktop --dsh-home "$HOME/.dsh"
 ```
 
 The installer validates the package, copies it to `$DSH_HOME/plugins/dsh-purge`, updates the profile `package.json`, links `node_modules/dsh-purge`, and writes `desktop-install.txt`. It does **not** run pnpm, Apply, or restart DSH.
