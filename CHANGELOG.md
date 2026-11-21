@@ -3,6 +3,53 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.2-rc.3 兼容变体**（另在 0.2.1-rc.3 / 0.2.2-rc.1 / rc.2 上做过影子验证）。
 上游以 MIT 发布，仍在维护（发版到 1.1.81，`dshTarget: 0.2.0-rc.2`）；本分支跟的是 0.2.2-rc.3。
 
+## 1.5.0 · 2026-11-22 · 定位转向：宿主定版
+
+宿主定版在 **0.2.2-rc.5**（本机 11-21 完成换包，读的是解包目录）。从这一版起，破甲按自己的节奏维护：
+补丁表、判据与文档只服务这一棵树，不再跟随任何外部发行节奏（出处：YuJunZhiXue/dsh-purge 1.1.71，MIT）。
+
+**本版：补丁表 77 条；测试 306 例。**（上一版 88 条）
+
+### 补丁表：88 → 77
+
+- 删 7 条死补丁：#56 #77 #88（`client.js` 与 bak 同为 704,147 B，双 0 命中）、#30 #31 #64 #65（`dsh-hooks-*` 包在 rc.5 全树 0 个目录）。
+- 冷存 4 条只对历史版本有效：#40 #46 #76 #28 → 新文件 `lib/patches-legacy.js`（`LEGACY_PATCHES` + `REMOVED_V15_PATCHES` 两个导出，不参与 apply/status/preflight/面板分母）。
+- 一次误删与纠正：#47 #49 #57 被审计判成"双 0 命中"，实测是 `detectSurface()` 判成 web 后 `targetFiles()` 返回空造成的假象——三条在现网都是 applied，已搬回主表。
+- 修锚 / 修账：#101 换行标签归位成 `[dsh-purge-101]`；#62 删掉永不出现的死标记（保留 replacement）；#24 摘掉"抄宿主原句"的判据，改成锚 id 的 `satisfiedBy`；
+  #105 的插入代码加 `Array.isArray` 兜底（`agent.session.surface.nodes` 非数组时抛 TypeError 会打断整轮）；#28 的 rc.5 目标键 `liangshen-minimal-prompt` 已在 `targetFiles()` 注册（是否启用见 legacy 注释）。
+- 全表里指向外部发行的表述清零，参照系统一换成"本表基准 rc.5"。
+
+### 代码
+
+- **换包不再无限杀进程**：`sealed-heal` 新增持久台账 `<DSH_HOME>/dsh-purge/asar-swap.json`（attempts / 最后错误 / asar 身份），超过 3 次转 `NEEDS_MANUAL_APPLY` 并停手；清零只认 asar 的 size+mtime 身份。
+- 换包脚本失败也要把 DSH 拉起来（此前是"杀完不启动"）；失败写 `.rename-pending`（第二行原因）。
+- `NEEDS_ASAR_RENAME` 只试一次改名：成了不杀进程，不成也不杀。
+- `patchShim` 备份失败不再静默：不覆盖 shim、返回 `no_backup:<msg>` 并记一行（此前是备份没了还照样覆盖并报 patched）。
+- 原子化补齐：`copyFileWithRetry` + `renameWithRetry`，`reapply` 里 `applied.json` / `installed-rev` 改原子写。
+- 删死分支：恒假的 clean 闸与对应 UI 文案、两条永不可达的 `pattern_not_found` 分支；`unmatched` 进软失败表（显示 `~` 不再是裸 `✗`）。
+- 删零引用死代码：`sessionForInject`、`isMinimalSession`；`adaptInjectForMinimalPreset` 的 `context` 参数标 `@deprecated`。
+- `exclude` 生效点注释 5 → 6（补 `gatherState`）；`--status` 遍历过滤后的清单，排除项不再打出 `undefined`。
+
+### 工程与门禁
+
+- **修一个真缺陷**：`install-offline` 不带 `--desktop-install` 时，探测起点把 `process.cwd()` 排在最前且不认 `DSH_DESKTOP_INSTALL`，
+  于是在任何含同名 exe 的目录里跑都会把那个目录写进 `desktop-install.txt`；顺手堵掉 argv 裸词按 cwd 解析的第二条泄漏。
+- **soul-guard 改为校验真正注入的字节**：此前哈希的是 `lib/default-prompt-inject.md`，运行时注入的却是 asset-table 里的槽（实测差 100 个 `\r`，门一直绿着看不见）。
+  现在双指纹（源 / 注入）必须相等，行尾差异要记账进 lock。
+- 新增 `scripts/assert-versions.mjs`（version / dsh.version / release-notes 首行 / CHANGELOG 首条四处一致）与 `scripts/assert-docs.mjs`（版本五处、宿主基线、补丁数、用例数、行号可解析、禁用词六类）。
+- `dshTarget` → `0.2.2-rc.5`（预检那行"⚠ 不一致"是噪音，会训练人忽略红灯）。
+- 包内容：`docs/notice` 三张截图 export-ignore + zip 断言黑名单；`install-offline` 的 skip 集合按完整相对路径补 `scripts/preflight-baseline.json`（此前只比首段目录名，加了也不生效）。
+
+### 文档：整体重写
+
+- 拆成三册：`docs/zh/handbook/`（运维手册，照着做）、`docs/zh/deep-dive/`（补丁表 / 判据状态机 / 工程发版）、`docs/zh/history/`（旧审计与事故存档，数字全部过期）。
+- 旧 `00-maintenance.md`（1183 行）拆解重写；根 README 两版重写；文案里所有指向外部发行的表述清掉。
+
+### 灵魂层
+
+- #40 的 7 条锚在 rc.5 的 `dsh-system-prompt/lib/index.js` 上逐条 false，判定"1.5 起不再影响人格注入"，与 #76 一并移出 SOUL-GUARD 清单；
+  按规矩显式重写 `soul-guard.lock`（digest `a889ae52cd2e`）；注入源与槽的指纹重写前后一致。
+
 ## 1.4.4 · 2026-11-21 · 审计台账"仍开放"的四条收口
 
 补丁表仍 88 条；测试 227 → 233。
@@ -12,6 +59,7 @@
 2. **`maxBytes` 双实例隐患**（S2-M2）：三处 preset 65536 → 98304（AGENTS.md 已 58.7KB，65536 只剩 6.8KB 余量）；全局那条 `agent-instructions` 的 13 行自相矛盾注释压成 4 行，只留 `disabled: true` 与回滚办法。
 3. **`applyPatches` 不吃 exclude**（S1-A6 残留）：默认按 `exclude-patches.json` 过滤，逃生门是显式 `{ includeExcluded: true }`；被排除的补丁不进 report。`readExcludePatches` 的"生效点"从 2 个入口更新到 5 个。（实测全仓唯一生产调用点来自已过滤的 `applyPatchesAllHosts`，所以这条是堵第二入口，不是现网正在贴 #19。）
 4. **`scripts/preflight-baseline.json` 随包发布**（台账 R2）：npm files 加 `!scripts/preflight-baseline.json`（白名单目录内 .npmignore 无效）、`.gitattributes` 加 `export-ignore`（护 GitHub 的 main.tar.gz）、release.yml 在 build zip 之后加 `assert zip content` 步骤（出现基线 exit 1、关键文件缺失 exit 1、条目数 <50 exit 1）。实测 npm pack 86 → 85 个文件，基线不在包里。
+
 
 ## 1.4.3 · 2026-11-21 · CI 在 Linux 上的第一处真红
 

@@ -1,5 +1,10 @@
 # 影子测试：四个纯净版本各装一次
 
+> **快照：2026-11-14 ~ 11-16｜四棵出厂树各装一次的方法与结果。本文件为历史记录，数字不再维护。**
+> 现行版：换包与解包态的处置在 [../handbook/04-宿主换包与解包态.md](../handbook/04-宿主换包与解包态.md)，矩阵原始数据在 [audits/a6-matrix.md](audits/a6-matrix.md) 与 [audits/shadow-summary.md](audits/shadow-summary.md)。
+> 原文正文一字未改，所以它里面的相对链接在搬动后不再指向现存文件——这是存档的正常形态，不是坏链。
+
+
 不上宿主、不动真环境，把每个版本的**出厂 app 树**拆出来，在上面真跑一遍安装流程。
 
 ## 材料从哪来
@@ -47,7 +52,7 @@ bak 有没有被动过、revert 后是否逐字节回原件、预设有没有被
 - `#40 COMPLETE_PROMPT_KEEP_INJECT`：0.2.1-rc.3 判 skipped（那版 return 里还没有 `tools` 字段）
 - `#56 REWIND_HIDE_CUT_ONLY`：rc.2/rc.3 判 skipped（`client.js` 压缩成 27 行，pattern 失配）
 
-原生态就已是 applied 的 5 条：#2 #3 #21 #24 #50（上游本来就这么写）。
+原生态就已是 applied 的 5 条：#2 #3 #21 #24 #50（宿主出厂本来就这么写）。
 
 ## 这一轮抓出来的两个 P0
 

@@ -48,13 +48,20 @@ function printStatus(state) {
   out.push("");
   if (state.ai_base) {
     out.push(`  补丁 ${state.patches_applied}/${state.patches_total} 已清洗, ${state.patches_pending} 待清洗, ${state.patches_skipped} 跳过`);
-    for (const p of core.ALL_PATCHES) {
+    // 必须遍历「生效补丁」而不是全表：patch_status 已被 exclude 过滤过，
+    // 拿全表点它会打出 "#19 … — undefined"（本机 excludePatches:[19] 就能复现）。
+    const shown = core.withoutExcluded(core.ALL_PATCHES, state.dsh_home);
+    for (const p of shown) {
       const s = state.patch_status[p.id];
-      const mark = s === "skipped" && !p.optional ? "!" : s === "applied" ? "✓" : s === "pending" ? "✗" : "·";
+      // unmatched 是软失配（strictFiles 的原文对不上，整次应用不算失败），别标成 ✗。
+      const mark = s === "skipped" && !p.optional ? "!" : s === "applied" ? "✓" : s === "pending" ? "✗" : s === "unmatched" ? "~" : "·";
       out.push(`    ${mark} [#${String(p.id).padEnd(2)}] ${p.name.padEnd(30)} ${p.layer}/${p.layer_en} — ${s}`);
     }
+    if (shown.length < core.ALL_PATCHES.length) {
+      out.push(`    · 另有 ${core.ALL_PATCHES.length - shown.length} 条按 exclude-patches.json 排除，不显示`);
+    }
   } else {
-    // 没定位到宿主插件根时 patchStatus 是空的：印 83 行 undefined 只会让人以为补丁全丢了。
+    // 没定位到宿主插件根时 patch_status 是空的：逐条印 undefined 只会让人以为补丁全丢了。
     out.push("  补丁 / patches  未定位宿主插件根，逐条状态未知（设 DSH_BASE 后重试）");
   }
   out.push("");

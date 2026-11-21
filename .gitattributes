@@ -21,3 +21,9 @@
 *.node binary
 # 本机预检基线不进任何分发物（GitHub 的 main.tar.gz 也走 export-ignore）
 scripts/preflight-baseline.json export-ignore
+
+# 第三方微信截图（docs/notice，零引用，243,971 B）：只留在仓库，不进任何分发物。
+# GitHub 的 main.tar.gz / main.zip 走 git archive，那条通道只认这里的 export-ignore；
+# npm tarball 走 package.json files 里的 "!docs/notice"；release zip 由 release.yml 的
+# "assert zip content" 兜底断言（出现了就红，不静默剔）。三条通道各管一段，别只改一处。
+docs/notice/** export-ignore

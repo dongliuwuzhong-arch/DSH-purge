@@ -6,6 +6,7 @@ import path from "node:path";
 
 import { ALL_PATCHES, applyReplacementsToText, keyIsNoop, patchFileOutcome, targetLooksPatched } from "../lib/core.js";
 import { hashFile, normalizeText, runtimeSyncLines } from "../lib/runtime-sync.js";
+// #57 于 2026-11-22 对账搬回主表（实测现网 applied；当初删它是审计把 desktop 树拒掉的假象）。
 
 const byId = (id) => ALL_PATCHES.find((p) => p.id === id);
 const keyOf = (patch) => (Array.isArray(patch.file) ? patch.file[0] : patch.file);
@@ -68,7 +69,7 @@ test("补丁 #57 两条 responses 通路都吃得住：变量名 role / instruct
   // 而 #57 只写了 role 那一条 —— pattern 不匹配，替换静默不生效。整条补丁因为
   // completions 通路的 marker 命中而显示 applied，把漏清洗盖住了。
   const p57 = byId(57);
-  assert.ok(p57, "找不到补丁 57");
+  assert.ok(p57, "#57 必须回到主表（1.5 对账：实测 applied）");
   const marker = "[dsh-purge] developer role allowlist: openai/azure";
   const head = "export function convertResponsesRequest(model, compat) {\n";
   const tail = "\n}\n";

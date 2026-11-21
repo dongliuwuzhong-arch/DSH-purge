@@ -60,12 +60,22 @@ jobs:
             node --check "$f" || fail "node --check 失败: $f"
           done
           mark "语法检查 ${#files[@]} 个文件"
-          node --check scripts/assert-patches.mjs || fail "node --check assert-patches.mjs"
-          node --check scripts/assert-soul-guard.mjs || fail "node --check assert-soul-guard.mjs"
+          # 只 check 两个脚本会漏（V15 工程 F-05）：sync-runtime / embed-default-prompt /
+          # check-bak-judge / preflight-upgrade / install-offline 当时既不 check 也无测试，
+          # 语法错可以直接进发布包。现在一把梭 scripts/*.mjs。
+          scripts=(scripts/*.mjs)
+          [ "${#scripts[@]}" -gt 0 ] || fail "scripts/ 下一个 .mjs 都没匹配到"
+          for f in "${scripts[@]}"; do
+            node --check "$f" || fail "node --check 失败: $f"
+          done
+          mark "脚本语法检查 ${#scripts[@]} 个"
           node --input-type=module -e "import './lib/index.js'" || fail "import lib/index.js 失败"
           mark "import lib/index.js"
           node scripts/assert-patches.mjs || fail "补丁表自检失败"
           mark "补丁表自检"
+          # 版本单源（V15 工程 P1-6 / F-09）：四个地方必须同一个数，别再靠人肉看。
+          node scripts/assert-versions.mjs || fail "版本不一致（package.json version/dsh.version、release-notes 首行、CHANGELOG 首条）"
+          mark "版本四处一致"
 
       - name: Unit tests
         run: |
@@ -101,6 +111,27 @@ jobs:
           fi
           echo "$out"
           echo "- [x] Soul guard" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Docs assertions
+        # 文档断言（V15 文档审计 §9）：六类 —— 版本 / 宿主基线 / 补丁条数 / 用例数 /
+        # 行号引用 / 禁用词（含「上游」）。文档写错了没人红，就是 1.5 之后三个月原样复发的路。
+        # 用例数那一类会自己跑一遍 node --test（几秒），换来"文档里的 N 例"不再靠人肉核。
+        run: |
+          set -uo pipefail
+          if ! out=$(node scripts/assert-docs.mjs 2>&1); then
+            {
+              echo '- [ ] **文档断言失败**'
+              echo ''
+              echo '```'
+              echo "$out"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "$out"
+            echo '::error::文档断言失败（版本/宿主基线/补丁条数/用例数/行号引用/禁用词）'
+            exit 1
+          fi
+          echo "$out"
+          echo "- [x] 文档断言" >> "$GITHUB_STEP_SUMMARY"
 
       # Publish 拆成具名步骤：以前是一整块 run，失败时 annotation 只指向
       # 「.github 第 N 行 exit 1」，看不出红在哪一步。拆开后失败会精确落在步骤名上。
@@ -183,9 +214,17 @@ jobs:
           names = zipfile.ZipFile(zip_path).namelist()
           problems = []
 
+          NOTICE_FILES = {"laozhang-live-1.jpg", "laozhang-live-2.jpg", "laozhang-wechat-1.jpg"}
+
           bad = [n for n in names if n.rsplit("/", 1)[-1] == "preflight-baseline.json"]
           if bad:
               problems.append("包里出现了本机预检基线（不许发）: " + ", ".join(bad))
+
+          # 第三方微信截图（docs/notice，243,971 B，零引用）：.gitattributes 里有 export-ignore，
+          # 这里是它失效时的兜底 —— 不是静默剔除，是红。
+          notice = [n for n in names if "/docs/notice/" in n or n.rsplit("/", 1)[-1] in NOTICE_FILES]
+          if notice:
+              problems.append("包里出现了 docs/notice 的第三方截图（不许发）: " + ", ".join(notice))
 
           required = [
               "package.json",
@@ -208,7 +247,7 @@ jobs:
                   print("::error::" + p)
               raise SystemExit(1)
 
-          print("包内容断言通过：%d 个条目，无 preflight-baseline.json，关键文件齐全" % len(names))
+          print("包内容断言通过：%d 个条目，无 preflight-baseline.json / docs/notice，关键文件齐全" % len(names))
           PY
           if ! out=$(python3 "$tmp/assert-zip.py" "$zip" "dsh-purge-${version}/" 2>&1); then
             {

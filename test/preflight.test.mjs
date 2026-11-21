@@ -76,14 +76,15 @@ test("五个桶 + 排除 = 补丁总数", () => {
   assert.ok(sum.balanced, "五桶加起来必须等于总数 - 排除");
 });
 
-test("少打一个桶 → balanced 立刻是 false（87≠88 那种）", () => {
+test("少打一个桶 → balanced 立刻是 false（合计 ≠ 总数那种）", () => {
+  // 分母取 1.5 的真实表数 77（不写死历史值）；桶只填 76 条 = 模拟旧版漏打一个桶。
   const sum = summarizeCounts({
     applied: new Array(73).fill(patch(1)), pending: [patch(2)],
-    skipped: [patch(3), patch(4), patch(5), patch(6)], na: new Array(9).fill(patch(7)),
+    skipped: [patch(3)], na: [patch(4)],
     missing: [], excluded: [],
-  }, 88);
-  assert.equal(sum.counted, 87);
-  assert.equal(sum.balanced, false, "87 ≠ 88 必须被认出来");
+  }, 77);
+  assert.equal(sum.counted, 76);
+  assert.equal(sum.balanced, false, "76 ≠ 77 必须被认出来");
 });
 
 // S3 严重 5：现网这棵健康树（4 条 optional 跳过 + 9 条 na）旧版会退 2。

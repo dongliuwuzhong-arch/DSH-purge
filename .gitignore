@@ -32,3 +32,9 @@ _archive/
 # 本机备份
 *.bak-*
 *.bak-原版
+
+# 脱敏占位符被误当路径写盘时留下的垃圾目录（2026-11-22 发现：ProgramData 缓存被复制进来）
+%SystemDrive%/
+%USERPROFILE%/
+%INSTALL_DIR%/
+%WORKSPACE%/

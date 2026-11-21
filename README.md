@@ -1,137 +1,90 @@
 # dsh-purge
 
-**DSH 0.2.2-rc.3 compatibility fork · 1.4.4**
+**Prompt and host-patch plugin for DeepSeek Harness · 1.5.0**
 
-> 📚 **Chinese docs: [docs/zh/README.md](docs/zh/README.md)** — install/upgrade, full patch table, backup & revert semantics, shadow-test method, known limits, audit reports (A1–A8 + shadow-matrix summary).
+Derived from [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 1.1.71 (MIT) and independently maintained since: the host baseline is pinned at DSH **0.2.2-rc.5**, and the patch table, the judgments and these docs serve this tree only — no external release cadence is followed.
 
-- Upstream: [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge)
-- This fork: [dongliuwuzhong-arch/DSH-purge](https://github.com/dongliuwuzhong-arch/DSH-purge)
-- Tested on: 0.2.1-rc.3 · 0.2.2-rc.1 · 0.2.2-rc.2 · 0.2.2-rc.3 (shadow install, four pristine trees)
-- Patch table: **88 patches**, 217 tests
+> 📚 **Chinese docs: [docs/zh/README.md](docs/zh/README.md)** — three books: handbook (do this), deep-dive (why), history (how it was verified back then, all numbers expired).
 
-> 🔴 **Read this first: host patches need a precondition to take effect.**
->
-> The official desktop build seals its host code in `resources\app.asar`, while patches can only be
-> written into the unpacked `resources\app\`. Electron resolves in the order
-> `app.asar` → `app` → `default_app.asar`, so **as long as the asar exists, the directory is never reached**.
->
-> "Patches are applied" therefore does not mean "patches are in effect". The only reliable check is
-> whether the status panel still prints `✗ app.asar: still present` — that line means everything is idle.
->
-> Since 1.2.1 the post-upgrade self-heal is automatic; see [`docs/SEALED-ASAR.md`](docs/SEALED-ASAR.md).
-`dsh-purge` is a prompt and host-patch plugin for a local DeepSeek Harness install. It adds a **Clean** dock beside the session title for managing prompts, rule sets, skills, and host patches. Nothing is written to the host until you explicitly apply it.
-
-This repository is a compatibility fork of the upstream project, tracking DSH **0.2.2-rc.3**. It keeps the upstream patch system and injection flow, and maintains the host-version mappings, desktop path handling, backup/revert checks, and install notes. It is not a from-scratch replacement, and it does not hide where it came from.
-
-## What it actually includes
-
-### Session dock
-
-The **dsh-purge** button beside the session title opens a right-hand dock. It currently has one page: **Clean**.
-
-| Area | What it does |
+| Item | Value |
 | --- | --- |
-| Patches | Grouped patch status, Apply, Restore, Uninstall |
-| Prompt | Edit `prompt-inject.md` as the session override |
-| Rule sets | Manage `AGENTS.md` / `CLAUDE.md` sets; enabling one writes under the current `$DSH_HOME` |
-| Skills | Import a zip or folder into this host's official `skills/<id>/SKILL.md`; DSH owns matching and loading |
-| Own servers | Register one IP or exact hostname per line in `net-scope-allow.txt` |
-| Rewind | Undo one turn / undo the last round via the official `session.fork({ atSeq })` behavior; also `/rewind` |
+| Plugin version | 1.5.0 |
+| Host baseline (pinned) | DSH 0.2.2-rc.5 |
+| Patch table | 77 patches, max id 105 (plus 4 archived entries outside the count) |
+| Tests | 306 tests |
+| Source (fork point) | [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 1.1.71 — credited for origin only, not a reference point |
+| This repository | [dongliuwuzhong-arch/DSH-purge](https://github.com/dongliuwuzhong-arch/DSH-purge) |
 
-### Prompt and rules
+## What it does
 
-- The default inject text ships with the plugin and is embedded at build time. The host's prompt file on disk is not read.
-- `prompt-inject.md` is a user file. Revert and uninstall keep it by default.
-- Rule sets can be switched; they are written under `$DSH_HOME/rules/`.
-- Workspace policy supports `strict` / `fallback` / `always`, controlling whether DSH's workspace baseline section is kept.
-- Skills stay out of the inject section and do not replace the prompt. Uninstalling the plugin does not delete user-imported skills.
+- **Dock page `Clean`**: grouped patch status, Apply / Restore / Uninstall, prompt override, rule sets, skill import, own-server list, rewind one turn.
+- **Host patches**: 77 text replacements, all idempotent. Each target is backed up as `<file>.dshpurge.bak` before the first apply.
+- **Persona injection**: the default inject text ships embedded in a sealed slot; `prompt-inject.md` is a user file and survives revert/uninstall.
+- **Entry points**: `dsh-purge --status|--apply|--revert|--uninstall|--edit|--sync`, chat commands `/purge`, `/rules`, `/skills`, `/rewind`, and model tools `purge_status`, `purge_apply`, `purge_revert`.
 
-### Patches
+## What it does not do
 
-- The patch table currently defines **88 patches**. Actual status is matched against the current host surface and reported as applied, pending, or skipped.
-- Before the first apply, each target is backed up as `<file>.dshpurge.bak`; repeated applies are idempotent.
-- **Restore** copies backups back and removes them. If a backup is missing, at least the plugin's shim lines are stripped.
-- **Uninstall** restores applied patches first, then removes the inject file, rule library, and the plugin itself.
-- If a target already carries patch markers, the plugin refuses to create a fake “identical” backup and names the file in status output.
+- **Not a network tool.** It only touches local official `@deepseek-ai` packages, the local profile, and override files under `$DSH_HOME`. No scanner, no payloads.
+- **It does not edit third-party plugin repositories.** For installed doctor / market / liangshen / mnemon it only makes best-effort runtime compatibility changes.
+- **It never clicks Apply for you.** Installing the plugin into a profile does not patch the host.
+- **No patch table for old hosts.** 0.1.x is not supported by this repository; Community Desktop is not maintained.
+- **No cross-surface arithmetic.** Web and desktop are installed and applied separately, each with its own profile and `$DSH_HOME`.
 
-### CLI and chat entry points
+> 🔴 **Applied is not the same as effective.**
+>
+> The official desktop build seals host code in `resources\app.asar`, while patches can only be written into the unpacked `resources\app\`. Electron resolves `app.asar` → `app` → `default_app.asar`, so **while the asar exists the directory is never reached**.
+>
+> The only check that matters: does status still print `✗ app.asar: still present`? That line means everything is idle.
+> Self-heal after an upgrade has been automatic since 1.2.1 — see [handbook/04](docs/zh/handbook/04-宿主换包与解包态.md) (Chinese) and the mechanism essay in [history/SEALED-ASAR.md](docs/zh/history/SEALED-ASAR.md).
 
-```sh
-dsh-purge --status
-dsh-purge --apply
-dsh-purge --revert
-dsh-purge --uninstall
-dsh-purge --edit
-dsh-purge --sync
-```
+## Four gates — all must be green before you commit
 
-```text
-/purge status | apply | revert | uninstall | edit | help
-/rules list | use <id> | create <id> | delete <id> | reset | help
-/skills list | import <zip-or-folder> | create <id> [description] | delete <id> | help
-/rewind
-```
+| Gate | Command | What "correct" looks like |
+| --- | --- | --- |
+| Patch table | `node scripts/assert-patches.mjs` | `✓ 补丁表自检通过` |
+| Persona layer | `node scripts/assert-soul-guard.mjs` | `soul-guard ok`, digest matches `soul-guard.lock` |
+| Versions | `node scripts/assert-versions.mjs` | `✓ 四处一致：1.5.0` |
+| Docs | `node scripts/assert-docs.mjs` | final line `六类全绿。` |
 
-Model tools: `purge_status`, `purge_apply`, `purge_revert`.
+These are what make a wrong doc go red: banned words, drifted line references, patch counts, test counts, five version sites. Boundaries of each gate: [deep-dive/03](docs/zh/deep-dive/03-工程与发版.md).
 
-## Compatibility
+## Install — pick one of three ways
 
-- Official desktop: DeepSeek Harness **0.2.2-rc.3**; also verified on 0.2.1-rc.3 / 0.2.2-rc.1 / 0.2.2-rc.2 (shadow install)
-- Official Web: the 0.2 line of `dsh web`
-- Node.js **>= 18**; **Node >= 22** is recommended on Windows to avoid console flashes
-- Web and desktop are installed and applied separately, each with its own profile and `$DSH_HOME`
-- 0.1.x is not supported; use the matching older upstream release for 0.1.7
-- Community Desktop is not maintained
+> This package is not on npm; `add dsh-purge` returns 404. Install from the repository archive, a local directory, or a manual copy.
 
-## Install
+### 1. Offline installer (recommended)
 
-> This package is not on npm. `add dsh-purge` returns 404. Install from the repository archive, a local directory, or a manual copy.
+No pnpm, no network, no automatic apply:
 
-### Official desktop
-
-The ordinary `dsh` CLI refuses `--profile desktop`. Use the desktop CLI shipped inside the install directory:
-
-```sh
-NODE="<DSH install>/resources/runtime/primary-runtime/dependencies/node/bin/node.exe"
-CLI="<DSH install>/resources/app/dsh/node_modules/@deepseek-ai/dsh-desktop-host/lib/cli.js"
-
-"$NODE" "$CLI" plugin --profile desktop add <this repo archive or main.tar.gz URL>
-```
-
-If the install still has `resources/app.asar`, replace `resources/app/` with `resources/app.asar/` in the paths above.
-
-### Official Web
-
-```sh
-dsh plugin --profile web add <this repo archive or main.tar.gz URL>
-```
-
-### Offline install (recommended)
-
-The repository ships an installer that does not run pnpm, does not use the network, and does not apply patches:
-
-```sh
+```bash
 node scripts/install-offline.mjs --profile desktop --dsh-home "$HOME/.dsh" --dry-run
 node scripts/install-offline.mjs --profile desktop --dsh-home "$HOME/.dsh"
 node scripts/install-offline.mjs --verify --profile desktop --dsh-home "$HOME/.dsh"
 ```
 
-Or install directly from a zip:
+What correct looks like: `--dry-run` prints every path it would write and changes nothing; the real run followed by `--verify` exits 0 and `$DSH_HOME/profiles/desktop/node_modules/dsh-purge` exists.
 
-```sh
-node scripts/install-offline.mjs --zip dsh-purge-1.4.4.zip --profile desktop --dsh-home "$HOME/.dsh"
+It does five things: validate the package, copy to `$DSH_HOME/plugins/dsh-purge`, update the profile `package.json`, link `node_modules/dsh-purge`, write `desktop-install.txt`. It does **not** run pnpm, Apply, or restart the host.
+
+### 2. Official CLI (needs network)
+
+The ordinary `dsh` CLI refuses `--profile desktop`; use the desktop CLI shipped inside the install directory:
+
+```bash
+NODE="<DSH install>/resources/runtime/primary-runtime/dependencies/node/bin/node.exe"
+CLI="<DSH install>/resources/app/dsh/node_modules/@deepseek-ai/dsh-desktop-host/lib/cli.js"
+
+"$NODE" "$CLI" plugin --profile desktop add <repo archive or main.tar.gz URL>
 ```
 
-The installer validates the package, copies it to `$DSH_HOME/plugins/dsh-purge`, updates the profile `package.json`, links `node_modules/dsh-purge`, and writes `desktop-install.txt`. It does **not** run pnpm, Apply, or restart DSH.
+For the web surface: `dsh plugin --profile web add <same>`. If the install still has `resources/app.asar`, replace `resources/app/` with `resources/app.asar/` in the paths above.
 
-### Manual install
+### 3. Manual
 
-1. Find the `$DSH_HOME` the running host actually uses. It must contain `profiles/`, and `profiles/<web|desktop>/package.json` must have `"name": "dsh-profile-web"` or `"dsh-profile-desktop"`.
-2. Put the plugin at `$DSH_HOME/plugins/dsh-purge`. Both the folder name and `package.json` `"name"` must be `dsh-purge`.
-3. Edit only that profile's `package.json`:
-   - Add `"dsh-purge": "file:../../plugins/dsh-purge"` to `dependencies`.
-   - Append `"dsh-purge"` to `dsh.profile.bundles`.
-4. Create the link (Windows Junction):
+1. Find the `$DSH_HOME` the running host actually uses: it must contain `profiles/`, and `profiles/<web|desktop>/package.json` must have `"name": "dsh-profile-web"` or `"dsh-profile-desktop"`.
+2. Put the plugin at `$DSH_HOME/plugins/dsh-purge`; folder name and `package.json` `"name"` must both be `dsh-purge`.
+3. Edit only that profile's `package.json`: add `"dsh-purge": "file:../../plugins/dsh-purge"` to `dependencies`, append `"dsh-purge"` to `dsh.profile.bundles`.
+4. Create the link on Windows:
 
 ```powershell
 New-Item -ItemType Junction -Path "$env:USERPROFILE\.dsh\profiles\desktop\node_modules\dsh-purge" -Target "$env:USERPROFILE\.dsh\plugins\dsh-purge"
@@ -139,51 +92,35 @@ New-Item -ItemType Junction -Path "$env:USERPROFILE\.dsh\profiles\desktop\node_m
 
 5. Fully quit and reopen the host, then click **dsh-purge → Clean → Apply**.
 
-After install, the dock button should appear, and `/purge status` should print the current `DSH_HOME` and patch status.
+What correct looks like: the dock button appears, and `/purge status` prints the current `$DSH_HOME` plus patch status.
 
-## Order of use
+## Where things live
 
-1. Install and restart the host.
-2. Open **dsh-purge → Clean** and check the patch groups and status.
-3. Edit the prompt or rule set first if needed.
-4. Click **Apply**. A successful apply restarts the host once so the patches enter the running process.
-5. Start a new chat. Existing sessions do not automatically reload an older prompt.
+| Path | Contents |
+| --- | --- |
+| `docs/zh/handbook/` | Operations manual: install, verify, daily checks, backup, revert, host swap, persona injection, troubleshooting, one-page runbook |
+| `docs/zh/deep-dive/` | Mechanism: [patch table](docs/zh/deep-dive/01-补丁表.md), [judgments and state machine](docs/zh/deep-dive/02-判据与状态机.md), [engineering and release](docs/zh/deep-dive/03-工程与发版.md) |
+| `docs/zh/history/` | Archive: nine audits, the 0.2.1 compatibility effort, the sealed-asar essay, the old patch doc. **Every number there is expired** |
+| `lib/` | Implementation: `patches.js` (main table), `patches-legacy.js` (archive), `core.js` (judgments and IO), `sealed-heal.js` (self-heal decision) |
+| `scripts/` | Gates and tools: four `assert-*` gates, `preflight-upgrade.mjs`, `install-offline.mjs` |
+| `test/` | 46 test files, 306 tests |
 
-> Adding the plugin to a profile does not patch the host by itself. **Apply** is explicit; the default configuration does not click it for you.
+## Three lessons that actually bite
+
+1. **A backup can be eaten by its own judgment.** Before 1.3.3, `inspectStaleBaks` could refresh a `.dshpurge.bak` into the *patched* bytes; revert then decided "nothing changed" and skipped — the panel looked complete and nothing could be rolled back.
+2. **`applied` is not the same as effective.** The target of #17 sits behind `disabled: true` in the host's own config, so the plugin never assembles; #73 once faked `applied` by sharing a marker with #70.
+3. **Wait for the host to exit before unsealing.** Renaming `app.asar` while the host runs always hits EBUSY, and a hard kill leaves a child-process handle behind.
 
 ## Data and state
 
-Runtime files live under `$DSH_HOME`:
+Runtime files under `$DSH_HOME`: `prompt-inject.md`, `rules/`, `skills/`, `net-scope-allow.txt`, `dsh-purge/` (plugin state, backup index, `exclude-patches.json`, `asar-swap.json`).
 
-- `prompt-inject.md` — user prompt
-- `rules/` — rule sets
-- `skills/` — user skills
-- `net-scope-allow.txt` — own-server list
-- `dsh-purge/` — plugin state, backup index, restart guard files
+Plugin source lives at `$DSH_HOME/plugins/dsh-purge`; a profile's `node_modules/dsh-purge` is an install-time copy, not a link — run `dsh-purge --sync` or reinstall after editing source.
 
-Plugin source lives at `$DSH_HOME/plugins/dsh-purge`. A profile's `node_modules/dsh-purge` is an install-time copy, not a link to the source; after editing source, run `dsh-purge --sync` or reinstall to update the runtime copy.
+## Source and license
 
-## Patch counts
-
-There can be two sets of numbers, and that is not a bug:
-
-- The desktop dock counts patches available on the desktop surface.
-- `dsh-purge --status` defaults to the Web surface, where more patch definitions match.
-
-Compare numbers only within one surface. When an optional package is not installed, its patches show as skipped and do not block the apply. A few `skipped` / `missing_file` rows on the current host are normal; the important number is **pending = 0**.
-
-## Known boundaries
-
-- It only touches local official `@deepseek-ai` packages, the local profile, and user override files under the harness home. It is not a public scanner and ships no attack payload.
-- It does not edit third-party plugin source repos; for installed doctor / market / liangshen / mnemon it only makes best-effort runtime compatibility changes.
-- The desktop app does not depend on the `dsh.cmd` shim; `original` or `missing` shim status does not affect chat.
-- After a host upgrade, patches whose original text no longer matches show as skipped and are left unchanged.
-
-## Upstream and license
-
-- Upstream project: [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge)
-- This branch starts from upstream **1.1.71** and tracks compatibility with DSH 0.2.2-rc.3
+- Source (fork point): [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) **1.1.71**
 - License: MIT, see [LICENSE](LICENSE)
-- Copyright for upstream work remains with its authors and contributors; this repository is responsible only for the compatibility changes
+- Copyright for the original work remains with its authors and contributors; this repository is responsible only for its own changes
 
-If this fork saves you time, star the upstream project too.
+**Everything after the fork point is a local decision**: the host baseline, the patch table, the judgments and the doc split answer to no external release.

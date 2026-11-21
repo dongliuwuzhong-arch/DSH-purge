@@ -300,7 +300,8 @@ export function bucketPatches(patches, status, excluded = new Set()) {
   return buckets;
 }
 
-/** 摘要行的算术：五桶之和 + excluded 必须等于补丁总数（S4 实测旧版 73+1+4+9=87≠88）。 */
+/** 摘要行的算术：五桶之和 + excluded 必须等于补丁总数。分母永远是 ALL_PATCHES.length（1.5 起 77），
+ *  这里不写死任何数字；S4 当年那张表是 88 条，实测 73+1+4+9=87≠88 才暴露出「少打一个桶」。 */
 export function summarizeCounts(buckets, patchCount = ALL_PATCHES.length) {
   const sums = {};
   for (const k of ["applied", "pending", "skipped", "na", "missing", "excluded"]) {
@@ -378,7 +379,7 @@ export function renderReport(ctx) {
   lines.push("破甲基准: " + target + (versions.runtime ? (same ? "  ✓ 一致" : "  ⚠ 不一致，模式可能要重锚") : ""));
   lines.push("");
 
-  // 五个桶全打出来，并当场对账（S4 实测：旧版只打四个桶，87≠88 看不出来）。
+  // 五个桶全打出来，并当场对账（S4 实测：旧版只打四个桶，87≠88 那种差额看不出来）。
   const bucketText = `applied ${sum.applied} / pending ${sum.pending} / skipped ${sum.skipped}（可选 ${softSkipped.length}、要重锚 ${brokenSkipped.length}）`
     + ` / na ${sum.na} / missing ${sum.missing}`
     + (sum.excluded ? ` / excluded ${sum.excluded}` : "");

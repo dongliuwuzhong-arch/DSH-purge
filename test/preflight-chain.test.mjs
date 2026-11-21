@@ -14,6 +14,8 @@ import { ALL_PATCHES, patchFileOutcome } from "../lib/core.js";
 //
 // 背景（rc.5 实测）：预检报 drift = #24 #46 #71 #84 #91 #101，但其中四条是**二段补丁**——
 // #46 的锚点由 #45 插入、#84 由 #83 插入、#91 由 #83 插入、#101 由 #87 插入。
+// 1.5（V15 补丁表）：#46 已移出主表（冷存进 patches-legacy.js），本组用例的"二段补丁"
+// 主体改用 #91 ← #83（同一条实证链，仍在主表）。
 // 逐条独立判定时它们在 pristine 树上必然 skipped，于是整批被当成"模式对不上"。
 //
 // 这组用例锁三件事：
@@ -36,12 +38,12 @@ function target(name, text, key = "desktop-shell") {
 }
 
 /** 真实桌面壳的 pristine 片段：#45 的两个锚点 + #83 的锚点块。 */
-function shellText({ breakHandoff = false } = {}) {
+function shellText({ breakHandoff = false, breakShell = false } = {}) {
   return [
     "var DesktopUpdateCoordinator = class {",
     "\tconstructor(app) {",
     "\t\tchild.once(\"error\", () => {});",
-    rep0(83),
+    breakShell ? rep0(83).replace(/^\s*/, "\t\t// moved: ") : rep0(83),
     "\t}",
     "\tapplyUpdate() {",
     "\t\t\t\tthis.updater.quitAndInstall(true, true);",
@@ -60,23 +62,23 @@ function baseStatus(patches, text, fp) {
   return status;
 }
 
-test("二段补丁：#46 在原始文本上贴不上，链上能贴，依赖实证到 #45", () => {
-  const patches = [byId(45), byId(46), byId(83), byId(84), byId(91)];
+test("二段补丁：#91 在原始文本上贴不上，链上能贴，依赖实证到 #83", () => {
+  const patches = [byId(45), byId(83), byId(84), byId(91)];
   const text = shellText();
-  const { fp, files } = target("chain-46-main.js", text);
+  const { fp, files } = target("chain-91-main.js", text);
 
-  // 孤立判定：pristine 树上 #46 就是 skipped —— 旧版预检的"漂移"正是这么来的。
-  assert.equal(patchFileOutcome(text, byId(46), fp), "skipped");
+  // 孤立判定：pristine 树上 #91 就是 skipped —— 旧版预检的"漂移"正是这么来的。
+  assert.equal(patchFileOutcome(text, byId(91), fp), "skipped");
 
   const chain = chainDryRun(patches, chainTargetFiles(files));
-  const rec46 = chain.get(46);
-  assert.notEqual(rec46.verdict, "skipped", "#46 链上必须贴得上，实际 " + rec46.verdict);
-  assert.equal(rec46.chainOnly, true, "#46 是二段补丁，chainOnly 必须为真");
-  assert.deepEqual(rec46.deps, [45], "#46 的锚点由 #45 插入，依赖必须指到 #45");
+  const rec = chain.get(91);
+  assert.notEqual(rec.verdict, "skipped", "#91 链上必须贴得上，实际 " + rec.verdict);
+  assert.equal(rec.chainOnly, true, "#91 是二段补丁，chainOnly 必须为真");
+  assert.deepEqual(rec.deps, [83], "#91 的锚点由 #83 插入，依赖必须指到 #83");
 });
 
 test("二段补丁：#84 / #91 都靠 #83 插入的锚点，依赖不许记成 last-writer", () => {
-  const patches = [byId(45), byId(46), byId(83), byId(84), byId(91)];
+  const patches = [byId(45), byId(83), byId(84), byId(91)];
   const { fp, files } = target("chain-83-main.js", shellText());
   const chain = chainDryRun(patches, chainTargetFiles(files));
 
@@ -91,14 +93,14 @@ test("二段补丁：#84 / #91 都靠 #83 插入的锚点，依赖不许记成 l
 });
 
 test("真坏：前序锚点被改掉 → 链上仍 skipped，不进 chainOnly、不编依赖", () => {
-  const patches = [byId(45), byId(46), byId(83), byId(84), byId(91)];
-  const { files } = target("chain-broken-main.js", shellText({ breakHandoff: true }));
+  const patches = [byId(45), byId(83), byId(84), byId(91)];
+  const { files } = target("chain-broken-main.js", shellText({ breakHandoff: true, breakShell: true }));
   const chain = chainDryRun(patches, chainTargetFiles(files));
-  const rec46 = chain.get(46);
-  assert.equal(rec46.verdict, "skipped", "#45 插不进锚点时 #46 就该老老实实 skipped");
-  assert.equal(rec46.chainOnly, false);
-  assert.deepEqual(rec46.deps, []);
-  assert.deepEqual(rec46.absentKeys, [], "目标文件在树里，不许被说成 profile 专属");
+  const rec = chain.get(91);
+  assert.equal(rec.verdict, "skipped", "#83 插不进锚点时 #91 就该老老实实 skipped");
+  assert.equal(rec.chainOnly, false);
+  assert.deepEqual(rec.deps, []);
+  assert.deepEqual(rec.absentKeys, [], "目标文件在树里，不许被说成 profile 专属");
 });
 
 test("真坏仍报「要重锚」：链上贴不上、没有 profile key 的留在 skipped", () => {
@@ -151,11 +153,11 @@ test("链上可贴会在报告里单独成段，并写清依赖", () => {
     aiBase: "X", target: "t", versions: {},
     buckets: { applied: [], pending: [], skipped: [], na: [], missing: [], excluded: [] },
     patchCount: 0,
-    chainRescued: [{ id: 46, name: "OFFICIAL_DESKTOP_UPDATE_ASCII", verdict: "applied", deps: [45] }],
+    chainRescued: [{ id: 91, name: "DESKTOP_HOST_CLOSE_NO_FATAL", verdict: "applied", deps: [83] }],
   });
   const line = lines.find((l) => l.includes("链上可贴"));
   assert.ok(line, "链上可贴必须单独成段：" + JSON.stringify(lines));
-  assert.ok(lines.some((l) => l.includes("#46 ← #45")), "依赖要写清：" + JSON.stringify(lines));
+  assert.ok(lines.some((l) => l.includes("#91 ← #83")), "依赖要写清：" + JSON.stringify(lines));
 });
 
 test("profile 提供：key 在候选树里不存在 → missing 桶 + 明说 profile 提供，不算坏", () => {
@@ -235,18 +237,18 @@ test("退出码：profile 提供不计漂移，但必须单独列出来", () => 
 test("链式判定不动文件：干跑前后候选树字节不变", () => {
   const text = shellText();
   const { fp, files } = target("readonly-main.js", text);
-  chainDryRun([byId(45), byId(46), byId(83), byId(84), byId(91)], chainTargetFiles(files));
+  chainDryRun([byId(45), byId(83), byId(84), byId(91)], chainTargetFiles(files));
   assert.equal(fs.readFileSync(fp, "utf8"), text, "预检只读，内存干跑不许落盘");
 });
 
 test("分桶对账：链式改写之后仍然 合计 + 排除 = 总数", () => {
-  const patches = [byId(45), byId(46), byId(83), byId(84), byId(91)];
+  const patches = [byId(45), byId(83), byId(84), byId(91)];
   const { fp, files } = target("account-main.js", shellText());
   const chain = chainDryRun(patches, chainTargetFiles(files));
   const status = baseStatus(patches, fs.readFileSync(fp, "utf8"), fp);
-  assert.equal(status[46], "skipped");
+  assert.equal(status[91], "skipped");
   applyChainStatus({ status, chain, patches });
-  assert.equal(status[46], "pending");
+  assert.notEqual(status[91], "skipped", "链上可贴 → 不再留在 skipped");
   const sum = summarizeCounts(bucketPatches(patches, status), patches.length);
   assert.ok(sum.balanced, "改写之后分桶必须仍然对得上：" + JSON.stringify(sum));
 });

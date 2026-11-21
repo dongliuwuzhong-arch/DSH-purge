@@ -6,8 +6,14 @@ import path from "node:path";
 
 // S1/A6：exclude-patches.json 以前只挡住「贴」和「显示」两个入口。同一条补丁在
 // hook deny 路径表、状态回填、client bundle 写盘、面板分母上各算各的 —— 本机把 #19
-// 排除之后，patches_total 仍是 88 而 patch_status[19] 不存在，面板"总数/就绪"永远差 1。
+// 排除之后，patches_total 仍是总数而 patch_status[19] 不存在，面板"总数/就绪"永远差 1。
 // 这里钉住 effectivePatchIds 这条唯一入口。
+//
+// 1.5（V15 补丁表）：原来这份夹具用的 #30 #31 #64 #65 #77 全部离开主表（hooks 四条与
+// 前端回退两条），所以两段改成核"新表下仍然成立的不变量"，而不是删掉：
+//   · hooks deny 表在表里已无 hooks 补丁 —— 它必须是空集，且与 exclude 无关（死代码被清干净）；
+//   · client bundle 写盘入口在表里已无 client.js 目标 —— 它必须空转，且被排除时同样空转。
+// 活着的两条臂（effectivePatchIds / 状态表 id 集合）改用存活 id #1 / #19。
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "dshpurge-exclude-scope-"));
 const plainHome = path.join(root, "home-plain");
@@ -15,7 +21,7 @@ const exclHome = path.join(root, "home-excl");
 process.env.DSH_HOME = plainHome;
 for (const h of [plainHome, exclHome]) fs.mkdirSync(h, { recursive: true });
 
-const EXCLUDED = [30, 31, 64, 65, 77];
+const EXCLUDED = [1, 19];
 fs.mkdirSync(path.join(exclHome, "dsh-purge"), { recursive: true });
 fs.writeFileSync(
   path.join(exclHome, "dsh-purge", "exclude-patches.json"),
@@ -24,15 +30,12 @@ fs.writeFileSync(
 
 // 宿主目录写成 node_modules/@deepseek-ai 形态：isWatchedClientBundle 只认这个形状。
 const aiBase = path.join(root, "node_modules", "@deepseek-ai");
-const hooksFile = path.join(aiBase, "dsh-hooks-claude-code", "lib", "index.js");
 const clientFile = path.join(aiBase, "dsh-client-ui-conversation", "lib", "client.js");
 
 const core = await import("../lib/core.js");
 const hooksDeny = await import("../lib/hooks-deny.js");
 
-const byId = (id) => core.ALL_PATCHES.find((p) => p.id === id);
-const clientRep = byId(77).replacements[0];
-const CLIENT_BEFORE = "// fixture client bundle\n" + clientRep.pattern + "\n";
+const CLIENT_BEFORE = "// fixture client bundle\n";
 
 function put(file, text) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -41,7 +44,6 @@ function put(file, text) {
 
 function seed() {
   fs.rmSync(aiBase, { recursive: true, force: true });
-  put(hooksFile, "// hooks fixture\n");
   put(clientFile, CLIENT_BEFORE);
   fs.rmSync(clientFile + core.BAK_SUFFIX, { force: true });
 }
@@ -56,29 +58,27 @@ test("S1/A6 · effectivePatchIds 就是 readExcludePatches 的口径（唯一入
   assert.equal(core.withoutExcluded(core.ALL_PATCHES, exclHome).length, core.ALL_PATCHES.length - EXCLUDED.length);
 });
 
-test("S1/A6 · hookDenyPaths 不再把被排除补丁的目标文件放进 deny 表", () => {
+test("S1/A6 · hookDenyPaths：主表已无 hooks 补丁 → 恒为空集（与 exclude 无关）", () => {
   seed();
-  const plain = core.hookDenyPaths(aiBase, plainHome);
-  assert.ok(plain.some((p) => path.resolve(p).toLowerCase() === path.resolve(hooksFile).toLowerCase()),
-    "对照组：未排除时必须登记：" + JSON.stringify(plain));
-  assert.deepEqual(core.hookDenyPaths(aiBase, exclHome), [], "被排除的补丁仍进了 deny 表");
+  assert.equal(core.hookDenyPaths(aiBase, plainHome).length, 0,
+    "表里已经没有 #30/#31/#64/#65，deny 表不该再登记任何文件：" + JSON.stringify(core.hookDenyPaths(aiBase, plainHome)));
+  assert.deepEqual(core.hookDenyPaths(aiBase, exclHome), []);
 });
 
-test("S1/A6 · annotateHookDenyStatus 不把被排除的 id 写回状态表", async () => {
+test("S1/A6 · annotateHookDenyStatus 不再改写状态表里的 hooks id", async () => {
   const io = { hookDenyPaths: () => [], loadText: async () => "", saveText: async () => true };
-  const status = { 30: "applied" };
+  const status = { 19: "applied" };
   const out = await hooksDeny.annotateHookDenyStatus(status, { hooksDenyBypass: false }, aiBase, io, exclHome);
-  assert.deepEqual(Object.keys(out), ["30"], "被排除的 31/64/65 又被回填了：" + JSON.stringify(out));
-  assert.equal(out[30], "applied", "已经 applied 的别被覆写");
+  assert.deepEqual(Object.keys(out), ["19"], "被排除的 id 之外不该再被回填：" + JSON.stringify(out));
+  assert.equal(out[19], "applied", "已经 applied 的别被覆写");
 });
 
 test("S1/A6 · patchStatus 用同一个 dshHome：排除的 id 不出现在状态里", async () => {
   seed();
   const full = await core.patchStatus(aiBase, core.ALL_PATCHES, { dshHome: plainHome });
   const part = await core.patchStatus(aiBase, core.ALL_PATCHES, { dshHome: exclHome });
-  assert.ok(30 in full, "对照组：未排除时该有条目");
-  assert.equal(30 in part, false, "被排除的补丁不该出现在状态表");
-  assert.equal(77 in part, false);
+  for (const id of EXCLUDED) assert.ok(id in full, "对照组：未排除时该有条目 #" + id);
+  for (const id of EXCLUDED) assert.equal(id in part, false, "被排除的补丁不该出现在状态表 #" + id);
   assert.deepEqual(
     Object.keys(part).map(Number).sort((a, b) => a - b),
     core.withoutExcluded(core.ALL_PATCHES, exclHome).map((p) => p.id).sort((a, b) => a - b),
@@ -86,11 +86,10 @@ test("S1/A6 · patchStatus 用同一个 dshHome：排除的 id 不出现在状�
   );
 });
 
-test("S1/A6 · patchWatchedClientBundlesSync 不给被排除的补丁写盘", () => {
+test("S1/A6 · patchWatchedClientBundlesSync 在无 client 补丁的表上空转（不写盘、不留 bak）", () => {
   seed();
-  fs.rmSync(clientFile + core.BAK_SUFFIX, { force: true });
   const written = core.patchWatchedClientBundlesSync(aiBase, exclHome);
-  assert.deepEqual(written, [], "被排除的补丁仍然写了 client bundle");
-  assert.equal(fs.readFileSync(clientFile, "utf8"), CLIENT_BEFORE, "被排除的补丁改动了文件");
-  assert.equal(fs.existsSync(clientFile + core.BAK_SUFFIX), false, "被排除的补丁还留了 bak");
+  assert.deepEqual(written, [], "被排除的表仍然写了 client bundle");
+  assert.equal(fs.readFileSync(clientFile, "utf8"), CLIENT_BEFORE, "被排除的表改动了文件");
+  assert.equal(fs.existsSync(clientFile + core.BAK_SUFFIX), false, "被排除的表还留了 bak");
 });

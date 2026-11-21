@@ -120,14 +120,20 @@ function copyPackage(source, target) {
   if (path.resolve(source) === path.resolve(target)) return;
   fs.rmSync(target, { recursive: true, force: true });
   fs.mkdirSync(target, { recursive: true });
-  const skip = new Set([".git", "node_modules", "test", ".github"]);
+  // 2026-11-22（V15 工程 P1-7）：preflight-baseline.json 是"我这台机器健康时"的贴点记录，
+  // 跟着插件进别人的 home，对方的预检差分就变成拿我的基线比他的机器（台账第 4 条）。
+  // 它是 scripts/ 下的单个文件、不是目录，所以按完整相对路径比，只比首段会漏。
+  const SKIP_TOP_DIRS = new Set([".git", "node_modules", "test", ".github"]);
+  const SKIP_RELATIVE_FILES = new Set(["scripts/preflight-baseline.json"]);
   fs.cpSync(source, target, {
     recursive: true,
     force: true,
     filter: (entry) => {
       const rel = path.relative(source, entry);
       if (!rel) return true;
-      return !skip.has(rel.split(path.sep)[0]);
+      const parts = rel.split(path.sep);
+      if (SKIP_TOP_DIRS.has(parts[0])) return false;
+      return !SKIP_RELATIVE_FILES.has(parts.join("/"));
     },
   });
 }
@@ -183,7 +189,9 @@ function linkPackage(profileDir, pluginDir, dryRun, force) {
 async function detectDesktopInstall() {
   try {
     const desktop = await import(pathToFileURL(path.join(ROOT, "lib", "desktop.js")).href);
-    const exe = desktop.findDesktopAppExecutable({ discover: true });
+    // useCwd:false —— 这个脚本可能在用户任意一个目录里被跑起来，当前目录里若正好有
+    // 一个同名 exe（空壳也算），探测会把它认成安装并写进 desktop-install.txt（V15 F-03）。
+    const exe = desktop.findDesktopAppExecutable({ discover: true, useCwd: false });
     return exe ? path.dirname(exe) : "";
   } catch {
     return "";

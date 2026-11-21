@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { ALL_PATCHES, applyReplacementsToText, patchFileOutcome } from "../lib/core.js";
+// #40 在 1.5 冷存进存档区（主表不再携带），这一段仍按「原样可回放」核它。
+import { LEGACY_PATCHES, REMOVED_V15_PATCHES } from "../lib/patches-legacy.js";
 
 // 2026-11-14：0.2.2-rc.3 把 6 条补丁的目标对象搬了家 / 换了写法（审计 A2）。
 // 下面每段 rc.3 原文都是从 app/dsh/node_modules/@deepseek-ai 下原样抠出来的，一字未改。
@@ -13,7 +15,7 @@ import { ALL_PATCHES, applyReplacementsToText, patchFileOutcome } from "../lib/c
 
 const byId = (id) => ALL_PATCHES.find((p) => p.id === id);
 const P32 = byId(32);
-const P40 = byId(40);
+const P40 = LEGACY_PATCHES.find((p) => p.id === 40);
 const P53 = byId(53);
 const P54 = byId(54);
 const P60 = byId(60);
@@ -110,13 +112,21 @@ test("六条都是「老 pattern 留着、新 pattern 追加」", () => {
   assert.ok(patternsOf(P60).includes("Wider sandbox mode for this complete program execution; requires justification and approval."));
   assert.ok(patternsOf(P60).includes("file sandbox denied an operation."));
   assert.ok(patternsOf(P62).includes("if (approval === undefined) return {"), "老的 undefined 变体留着");
-  assert.ok((P62.markers || []).includes("[dsh-purge] 0.2.2 tool ask failopen"), "0.2.2 那版的 marker 也留着");
+  // 1.5 的账：那句 "[dsh-purge] 0.2.2 tool ask failopen" 在受支持的两版宿主上命中 0、
+  // 也不在 markersWritten 里，属于死标记，已从 markers 摘掉。替换体本身还留着（旧宿主上
+  // 仍会写出那句 tag），所以这里断言的是「账上没有它」，不是「replacement 里没有它」。
+  assert.ok(!(P62.markers || []).includes("[dsh-purge] 0.2.2 tool ask failopen"), "死标记必须已经从 markers 里删掉");
+  assert.ok(P62.replacements.map((r) => r.replace).join("\n").includes("0.2.2 tool ask failopen"), "写出这句 tag 的 replacement 本身要留着（旧宿主用）");
 });
 
-test("三条已由宿主/官方自带的（#56 #77 #80）结构没动，只是加了注释说明", () => {
-  for (const id of [56, 77, 80]) {
-    const p = byId(id);
-    assert.ok(p, "#" + id + " 必须还在表里（补丁表仍是 87 条）");
-    assert.ok(Array.isArray(p.replacements) && p.replacements.length > 0, "#" + id + " 的 replacements 不该被清空");
+test("已由宿主/官方自带的：只剩 #80 在主表；#56 / #77 1.5 起进存档区", () => {
+  const p80 = byId(80);
+  assert.ok(p80, "#80 必须还在表里");
+  assert.ok(Array.isArray(p80.replacements) && p80.replacements.length > 0, "#80 的 replacements 不该被清空");
+  for (const id of [56, 77]) {
+    assert.equal(byId(id), undefined, "#" + id + " 1.5 起不该再出现在主表");
+    const archived = REMOVED_V15_PATCHES.find((p) => p.id === id);
+    assert.ok(archived, "#" + id + " 必须原样留在 patches-legacy.js 的存档区（仓库没有 git，删了就找不回来）");
+    assert.ok(Array.isArray(archived.replacements) && archived.replacements.length > 0, "#" + id + " 的存档不该被掏空");
   }
 });

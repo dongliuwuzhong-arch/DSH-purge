@@ -21,7 +21,9 @@ const HOST = [
 test("#105 在 pre-step 的 splice 前插入 surface 去重判据", () => {
   const once = applyReplacementsToText(HOST, P105, "index.js");
   assert.equal(once.changed, true);
-  assert.match(once.text, /const dshPurgeOnSurface = desired !== void 0 && agent\.session\.surface\.nodes\.some/);
+  // 1.5：nodes 先经 Array.isArray 兜底，再 .some（非数组时抛 TypeError 会打断整轮 pre-step）
+  assert.match(once.text, /const dshPurgeNodes = Array\.isArray\(agent\?\.session\?\.surface\?\.nodes\) \? agent\.session\.surface\.nodes : \[\]/);
+  assert.match(once.text, /const dshPurgeOnSurface = desired !== void 0 && dshPurgeNodes\.some/);
   assert.match(once.text, /if \(desired === void 0 \|\| dshPurgeOnSurface \|\| decision\.messages\.some/);
   assert.equal(applyReplacementsToText(once.text, P105, "index.js").changed, false, "必须幂等");
   assert.equal(patchFileOutcome(once.text, P105, "index.js"), "applied");

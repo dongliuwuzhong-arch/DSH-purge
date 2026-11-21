@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { ALL_PATCHES, applyReplacementsToText, patchFileOutcome } from "../lib/core.js";
+import { LEGACY_PATCHES, REMOVED_V15_PATCHES } from "../lib/patches-legacy.js";
 
 // rc.5 适配（2026-11-16）。下面的片段是**逐字节**从两棵树抄来的，不是凭记忆排的：
 //   rc.3 现网 %INSTALL_DIR%/resources/app　rc.5 候选 C:/DSH沙箱/rc5/tree
@@ -124,9 +125,10 @@ test("#80 旧的中间态形态（minimal fs tool parity + fs-search/web）不�
   assert.equal(applyReplacementsToText(stale, byId(80), "minimal.patch.yml").changed, false);
 });
 
-test("#46 rc.5 上 #45 → #46 不重复插函数；repl[1] 只留给 rc.3 老安装器", () => {
+test("#46 rc.5 上 #45 → #46 不重复插函数；repl[1] 只留给 rc.3 老安装器（1.5 起 #46 在存档区）", () => {
   const p45 = byId(45);
-  const p46 = byId(46);
+  const p46 = LEGACY_PATCHES.find((p) => p.id === 46);
+  assert.ok(p46, "#46 必须原样留在 patches-legacy.js（主表 1.5 起不再携带它）");
   const shell = ["var DesktopUpdateCoordinator = class {", "\tconstructor(owner) { this.owner = owner; }", "};", ""].join("\n");
   const after45 = applyReplacementsToText(shell, p45, "main.js");
   assert.equal(after45.changed, true);
@@ -144,10 +146,13 @@ test("#46 rc.5 上 #45 → #46 不重复插函数；repl[1] 只留给 rc.3 老�
 const CLIENT_APPEND = "append(record){const event=record.event;if(this.inputs.has(event.seq))return`none`;if(this.revised.size>0)this.revised.clear();this.inputs.set(event.seq,record);let publication=`none`;";
 const CLIENT_REPLACE_WINDOW = "replaceWindow(entries,hasMore){this.contexts.clear();this.contextsByKind.clear();this.contextsBySeq.clear();this.contextsByTarget.clear();";
 
-test("#56 / #77 两版都不命中就等于空操作，desc 必须写明", () => {
+test("#56 / #77 1.5 起进存档区：主表不再有它们，存档里仍是「两版都不命中＝空操作」", () => {
   const fixture = CLIENT_APPEND + "\n" + CLIENT_REPLACE_WINDOW + "\n";
-  const p56 = byId(56);
-  const p77 = byId(77);
+  const p56 = REMOVED_V15_PATCHES.find((p) => p.id === 56);
+  const p77 = REMOVED_V15_PATCHES.find((p) => p.id === 77);
+  assert.equal(byId(56), undefined, "#56 不该再出现在主表");
+  assert.equal(byId(77), undefined, "#77 不该再出现在主表");
+  assert.ok(p56 && p77, "#56 / #77 必须原样留在 patches-legacy.js");
   assert.equal(patchFileOutcome(fixture, p56, "client.js"), "skipped");
   assert.equal(patchFileOutcome(fixture, p77, "client.js"), "skipped");
   assert.equal(p56.optional, true);
@@ -170,8 +175,10 @@ const AGENT_LOOP_HEAD = [
 	"",
 ].join("\n");
 
-test("#88 已标 optional、desc 说明只给历史版本用，锚点本身仍能把宽判据收严", () => {
-  const p = byId(88);
+test("#88 1.5 起进存档区（仅历史版本需要），锚点本身仍能把宽判据收严", () => {
+  const p = REMOVED_V15_PATCHES.find((p) => p.id === 88);
+  assert.ok(p, "#88 必须原样留在 patches-legacy.js");
+  assert.equal(byId(88), undefined, "#88 不该再出现在主表");
   assert.equal(p.optional, true);
   assert.match(p.desc, /仅历史版本需要/);
   assert.equal(patchFileOutcome(AGENT_LOOP_HEAD, p, "agent-loop/index.js"), "skipped", "rc.5 原文上没有对象");

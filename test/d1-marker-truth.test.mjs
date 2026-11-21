@@ -92,9 +92,14 @@ test("#24 satisfiedBy：出厂 preset 整块已是目标态判 applied，老形�
     "satisfiedBy 只认出厂 preset 的整块形态，不能退化成'只要 fetch: true 就算贴过'");
 });
 
-test("#24 markersWritten 不含上游原句；markers 仍然认得它（判据不收紧也不放松）", () => {
+test("#24 markers 只留本表写出的那条；上游原句不再是判据（1.5 归到 satisfiedBy 的结构判定）", () => {
   assert.deepEqual(patchWrittenMarkers(P24), [MARKER]);
-  assert.ok(P24.markers.includes("fetch: true"), "markers 里的上游原句是历史判据，不能删");
+  assert.equal(P24.markers.includes("fetch: true"), false,
+    "上游原句 1.5 已从 markers 摘掉：markersAny 下它让 OR 恒真，没贴过的文件也判 applied");
+  assert.ok(P24.satisfiedBy[0].includes("- id: tool-web") && P24.satisfiedBy[0].includes("config:"),
+    "「出厂即达标」改由 satisfiedBy 锚 id + 结构表达，不抄宿主原句");
+  // 兜底仍在：core.js 的 markerLooksUpstream() 会把「像宿主原句」的 marker 剔掉，
+  // 但那是第二道防线，不该再有活给它干。
   assert.ok(!P24.markersWritten.includes("fetch: true"), "上游原句不该被算成我们的痕迹");
 });
 
@@ -104,7 +109,8 @@ test("#62 / #100 / #101 / #102 的 markersWritten 只留本表真会写的那几
     "[dsh-purge] unavailable channel → allow",
   ]);
   assert.deepEqual(patchWrittenMarkers(patchById(100)), ["[dsh-purge-100] steer() stays next-step"]);
-  assert.deepEqual(patchWrittenMarkers(patchById(101)), ["[dsh-purge-89]"]);
+  // 1.5：#101 的 replace 归位成自己的号（原来写的是 #87 的 -89），markersWritten 跟着走。
+  assert.deepEqual(patchWrittenMarkers(patchById(101)), ["[dsh-purge-101]"]);
   assert.deepEqual(patchWrittenMarkers(patchById(102)), ["[dsh-purge-102]"]);
 });
 
