@@ -32,7 +32,8 @@ test("占位符判定：%VAR% / $env:VAR / ${VAR} / $VAR 都认得，普通路�
 });
 
 test("能展开的就展开（%SystemDrive% 这类真实存在的变量），展不开的一律 reject", () => {
-  const hit = resolveCandidatePath("%SystemDrive%/ProgramData/x", { env: {} });
+  // 显式给 env：Linux CI 上没有 SystemDrive 这个变量，靠宿主环境会恒 reject（2026-11-22 修）
+  const hit = resolveCandidatePath("%SystemDrive%/ProgramData/x", { env: { SystemDrive: "C:" } });
   assert.equal(hit.rejected, false, hit.reason);
   assert.match(hit.path, /ProgramData[\\/]x$/);
   assert.ok(!hit.path.includes("%"), "展开之后不该还留着 %：" + hit.path);
@@ -43,8 +44,11 @@ test("能展开的就展开（%SystemDrive% 这类真实存在的变量），展
 });
 
 test("批量过滤：能用的留下、去重、顺序稳定", () => {
-  const out = filterCandidatePaths(["C:/a", "%INSTALL_DIR%/b", "C:/a", "", "C:/c"], { env: {} });
-  assert.deepEqual(out.map((p) => p.replace(/\\/g, "/")), ["C:/a", "C:/c"]);
+  // 用平台绝对路径造夹具：posix 上 "C:/a" 不是绝对路径，会被正当拒绝（2026-11-22 修）
+  const a1 = path.resolve(os.tmpdir(), "pa-a");
+  const a3 = path.resolve(os.tmpdir(), "pa-c");
+  const out = filterCandidatePaths([a1, "%INSTALL_DIR%/b", a1, "", a3], { env: {} });
+  assert.deepEqual(out.map((p) => path.normalize(p)), [path.normalize(a1), path.normalize(a3)]);
 });
 
 test("探测入口：DSH_DESKTOP_INSTALL 写成 %INSTALL_DIR%\\DeepSeek Harness.exe 必须返回空", () => {

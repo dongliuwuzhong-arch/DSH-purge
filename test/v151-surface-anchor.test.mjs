@@ -21,7 +21,13 @@ const NODE = process.execPath;
 /** 一份"像桌面安装"的空目录：有 resources/app/dsh 就够 installLooksDesktop 认。 */
 function fakeInstall(tag) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "purge-anchor-" + tag + "-"));
-  fs.mkdirSync(path.join(dir, "resources", "app", "dsh"), { recursive: true });
+  const appDsh = path.join(dir, "resources", "app", "dsh");
+  fs.mkdirSync(appDsh, { recursive: true });
+  // 2026-11-22：Linux CI 上这条会红——只有 resources/app/dsh 时 targetFiles() 找不到 @deepseek-ai，
+  // --status 认成 desktop 之后仍打不出"补丁 N/M 已清洗"。所以夹具里补一棵最小插件根。
+  const ai = path.join(appDsh, "node_modules", "@deepseek-ai", "dsh-agent-instructions", "lib");
+  fs.mkdirSync(ai, { recursive: true });
+  fs.writeFileSync(path.join(ai, "index.js"), "// fixture\n", "utf8");
   return dir;
 }
 
