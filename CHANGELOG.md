@@ -3,6 +3,16 @@
 本仓库是 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 **0.2.2-rc.3 兼容变体**（另在 0.2.1-rc.3 / 0.2.2-rc.1 / rc.2 上做过影子验证）。
 上游以 MIT 发布，仍在维护（发版到 1.1.81，`dshTarget: 0.2.0-rc.2`）；本分支跟的是 0.2.2-rc.3。
 
+## 1.4.4 · 2026-11-21 · 审计台账"仍开放"的四条收口
+
+补丁表仍 88 条；测试 227 → 233。
+
+1. **ptc 档没有 `tool-executor-ptc`**（台账 S2-M1）：出厂 ptc 预设里有，profile 覆盖块里没有 → ptc 会话根本没有 run_code，退回整张工具表。已按出厂相对顺序补回（`tool-web` 之后、`tool-presentation` 之前）。
+   同批发现的 `tool-office`（ptc/standard 都缺）**故意没补**：它在这两档从未加载过，宿主升级在即不叠首载风险，列为已知差异。
+2. **`maxBytes` 双实例隐患**（S2-M2）：三处 preset 65536 → 98304（AGENTS.md 已 58.7KB，65536 只剩 6.8KB 余量）；全局那条 `agent-instructions` 的 13 行自相矛盾注释压成 4 行，只留 `disabled: true` 与回滚办法。
+3. **`applyPatches` 不吃 exclude**（S1-A6 残留）：默认按 `exclude-patches.json` 过滤，逃生门是显式 `{ includeExcluded: true }`；被排除的补丁不进 report。`readExcludePatches` 的"生效点"从 2 个入口更新到 5 个。（实测全仓唯一生产调用点来自已过滤的 `applyPatchesAllHosts`，所以这条是堵第二入口，不是现网正在贴 #19。）
+4. **`scripts/preflight-baseline.json` 随包发布**（台账 R2）：npm files 加 `!scripts/preflight-baseline.json`（白名单目录内 .npmignore 无效）、`.gitattributes` 加 `export-ignore`（护 GitHub 的 main.tar.gz）、release.yml 在 build zip 之后加 `assert zip content` 步骤（出现基线 exit 1、关键文件缺失 exit 1、条目数 <50 exit 1）。实测 npm pack 86 → 85 个文件，基线不在包里。
+
 ## 1.4.3 · 2026-11-21 · CI 在 Linux 上的第一处真红
 
 拉到了 CI 日志（本机 git 凭据直连 GitHub API），确认 1.4.2 的失败点是 **Unit tests**，且只有一条：

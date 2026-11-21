@@ -58,7 +58,7 @@ node -e "import('file:///.../dsh-purge/lib/core.js').then(async m => {
 ```bash
 node scripts/assert-patches.mjs      # 补丁表自检：条数 / id 唯一 / CHANGELOG 数字对得上
 node scripts/assert-soul-guard.mjs   # 提示词层没被人动过
-node --test test/*.test.mjs          # 227 例
+node --test test/*.test.mjs          # 233 例
 ```
 
 要连宿主的实际状态一起看，用配套的 `check-paths.mjs`（不在本仓库，随本机运维工具走）。

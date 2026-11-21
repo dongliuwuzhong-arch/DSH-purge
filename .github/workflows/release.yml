@@ -132,6 +132,97 @@ jobs:
           fi
           test -s "$zip"
           echo "zip=$(pwd)/$zip  bytes=$(wc -c < "$zip")"
+          # 剔掉本机预检基线（台账第 4 条）。zip 是 git archive 打的，
+          # package.json 的 files 与 .npmignore 对它无效（那两条只管 npm tarball），
+          # 所以必须在产物上直接删条目。下面那道断言负责证明这里真的删干净了。
+          cat > "${RUNNER_TEMP:-/tmp}/strip-baseline.py" <<'PY'
+          import os, sys, zipfile
+
+          zip_path = sys.argv[1]
+          src = zipfile.ZipFile(zip_path)
+          bad = [n for n in src.namelist() if n.rsplit("/", 1)[-1] == "preflight-baseline.json"]
+          if not bad:
+              print("strip: 包里没有 preflight-baseline.json，无需剔除")
+              src.close()
+              raise SystemExit(0)
+          tmp = zip_path + ".strip"
+          out = zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED)
+          for item in src.infolist():
+              if item.filename in bad:
+                  print("strip: 剔除 %s" % item.filename)
+                  continue
+              info = zipfile.ZipInfo(item.filename, item.date_time)
+              info.compress_type = zipfile.ZIP_DEFLATED
+              info.external_attr = item.external_attr
+              info.create_system = item.create_system
+              out.writestr(info, src.read(item.filename))
+          out.close()
+          src.close()
+          os.replace(tmp, zip_path)
+          print("strip: 剔除后剩 %d 个条目" % len(zipfile.ZipFile(zip_path).namelist()))
+          PY
+          python3 "${RUNNER_TEMP:-/tmp}/strip-baseline.py" "$zip"
+          test -s "$zip"
+          echo "stripped: bytes=$(wc -c < "$zip")"
+
+      # 发布包内容断言：包里只要出现 preflight-baseline.json 就绿不了（台账第 4 条）。
+      # 位置卡在 build zip 之后、create/upload 之前——坏包连 release 页都建不出来，
+      # 也就不会出现「页面建好、资产是脏的」那种半成品。
+      # 顺带把「该有的还在」一起断言：剔文件的手一抖把 scripts/ 整目录删了，这里会红。
+      - name: Publish / assert zip content
+        run: |
+          set -euo pipefail
+          version="${{ steps.ver.outputs.version }}"
+          zip="dsh-purge-${version}.zip"
+          tmp="${RUNNER_TEMP:-/tmp}"
+          test -f "$zip" || { echo "::error::打包产物 $zip 不存在"; exit 1; }
+          cat > "$tmp/assert-zip.py" <<'PY'
+          import sys, zipfile
+
+          zip_path, prefix = sys.argv[1], sys.argv[2]
+          names = zipfile.ZipFile(zip_path).namelist()
+          problems = []
+
+          bad = [n for n in names if n.rsplit("/", 1)[-1] == "preflight-baseline.json"]
+          if bad:
+              problems.append("包里出现了本机预检基线（不许发）: " + ", ".join(bad))
+
+          required = [
+              "package.json",
+              "soul-guard.lock",
+              "release-notes.md",
+              "lib/index.js",
+              "bin/dsh-purge.js",
+              "scripts/preflight-upgrade.mjs",
+              "scripts/install-offline.mjs",
+          ]
+          missing = [p for p in required if (prefix + p) not in names]
+          if missing:
+              problems.append("包里缺了该有的文件: " + ", ".join(missing))
+
+          if len(names) < 50:
+              problems.append("包里只剩 %d 个条目，像是被打包打薄了" % len(names))
+
+          if problems:
+              for p in problems:
+                  print("::error::" + p)
+              raise SystemExit(1)
+
+          print("包内容断言通过：%d 个条目，无 preflight-baseline.json，关键文件齐全" % len(names))
+          PY
+          if ! out=$(python3 "$tmp/assert-zip.py" "$zip" "dsh-purge-${version}/" 2>&1); then
+            {
+              echo '- [ ] **发布包内容断言失败**'
+              echo ''
+              echo '```'
+              echo "$out"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "$out"
+            exit 1
+          fi
+          echo "$out"
+          echo "- [x] 发布包内容断言" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publish / create or update release
         env:

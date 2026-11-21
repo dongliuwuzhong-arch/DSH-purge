@@ -120,7 +120,7 @@ node scripts/preflight-upgrade.mjs --host "<安装目录>/resources/app"
 | `node tools/check-pruner.mjs` | 剪枝走的是原始实现还是 #19 禁用态？四处预设阈值是多少？ | 0 = 可用 | <2s |
 | `node scripts/assert-patches.mjs` | 补丁表自身还自洽吗（条数 / id 唯一 / 与 CHANGELOG 声明一致）？ | 0 / 1 | <1s |
 | `node scripts/assert-soul-guard.mjs` | 注入正文和 16 条关键补丁有没有被人"顺手改"？ | 0 / 1 | <1s |
-| `node --test test/*.test.mjs` | 代码有没有退化？ | 0 / 1 | ~2.6s（227 例） |
+| `node --test test/*.test.mjs` | 代码有没有退化？ | 0 / 1 | ~2.6s（233 例） |
 | `node scripts/preflight-upgrade.mjs --host <树>` | 候选宿主树上哪些补丁贴得上、哪些锚点失效？ | 0 / 2 / 1 | 5~20s |
 
 `tools/check-paths.mjs` 和 `tools/check-pruner.mjs` **不在本仓库**，是本机运维脚本（随工作区走）；其余四条都在 `scripts/` 下。
@@ -244,7 +244,7 @@ node --test test/*.test.mjs    # 不能加引号，让 shell 展开
 
 **[实测]**：`tests 217 / pass 217 / fail 0`。
 
-> ⚠ 这两个数是 **1.4.3 定版口径**。谁加用例，谁顺手把这里、两份 README 和 `docs/zh/README.md` 的数字一起改：树里的用例数大于这个数，先怀疑"忘了改文档"，别怀疑测试坏了（1.4.3 的用例已经进树，见 `lib/patches.js:975`）。
+> ⚠ 这两个数是 **1.4.4 定版口径**。谁加用例，谁顺手把这里、两份 README 和 `docs/zh/README.md` 的数字一起改：树里的用例数大于这个数，先怀疑"忘了改文档"，别怀疑测试坏了（1.4.4 的用例已经进树，见 `lib/patches.js:975`）。
 
 三个必须知道的点：
 
@@ -381,7 +381,7 @@ patchStatus(aiBase, patches, options)               lib/core.js:4469（导出，
   A10 记的"0/1"是**文件级**口径，这里是补丁级累加，两个数都对。
 - **`applied` ≠ `grep -c "dsh-purge" <文件>` 非 0**：#24 的出厂 preset 文件里本来就有 3 处 `dsh-purge` 字样，全部来自 #42
   —— 文件级 grep 在 #24 上查不出问题，只能回到补丁级落地率。
-- `satisfiedBy` 现在**只降级不升级**，needle 也锚死了 `- id: tool-web` 三行（`lib/patches.js:978-984`，1.4.3 起）：
+- `satisfiedBy` 现在**只降级不升级**，needle 也锚死了 `- id: tool-web` 三行（`lib/patches.js:978-984`，1.4.4 起）：
   A10 §3.1 反例 A（同一文件还留着 0 缩进 `fetch: false`）报 `pending`，反例 B（无关工具也写 `fetch: true`）不再被认。
 - 布局软补丁（标识行 / 审批句 / `softSettle`）**不要求 marker**，只看"没活可干"（`core.js:4031`）。
 - 结论：`applied` 与 `satisfied` 都只说明**"这条现在不用点应用"**，都不能当成"已经改到宿主里了"——后者要落地率加后端行为一起证明。
@@ -1038,7 +1038,7 @@ node scripts/preflight-upgrade.mjs --host "<安装目录>/resources/app"
 cd "<插件根>"
 node scripts/assert-patches.mjs        # 1. 条数 / id / name / file / CHANGELOG 对账
 node scripts/assert-soul-guard.mjs     # 2. 动到 16 条关键补丁会在这里红（见下）
-node --test test/*.test.mjs            # 3. 227 例
+node --test test/*.test.mjs            # 3. 233 例
 node scripts/sync-runtime.mjs --apply  # 4. 同步运行副本
 node scripts/preflight-upgrade.mjs --host "<安装目录>/resources/app"   # 5. 现网树：必须仍 0 漂移
 node scripts/preflight-upgrade.mjs --host "<候选树>/resources/app"     # 6. 目标版本树：看新锚点命中
@@ -1082,9 +1082,9 @@ node bin/dsh-purge.js --sync                         # 等价入口
 
 ```
 dsh-purge 运行副本同步 / runtime sync
-  源码 / source  <插件根>  (1.4.3)
+  源码 / source  <插件根>  (1.4.4)
   desktop  副本  <DSH_HOME>/profiles/desktop/node_modules/dsh-purge
-               版本 1.4.3  已同步
+               版本 1.4.4  已同步
 
   全部同步。
 ```
@@ -1105,11 +1105,11 @@ dsh-purge 运行副本同步 / runtime sync
 
 | 位置 | 例子 | 判据命令 |
 | --- | --- | --- |
-| `package.json` → `version` | `1.4.3` | `node -p "require('./package.json').version"` |
-| `package.json` → `dsh.version` | `1.4.3` | `node -p "require('./package.json').dsh.version"` |
+| `package.json` → `version` | `1.4.4` | `node -p "require('./package.json').version"` |
+| `package.json` → `dsh.version` | `1.4.4` | `node -p "require('./package.json').dsh.version"` |
 | `package.json` → `dshTarget` | `0.2.2-rc.3`（**宿主**版本，不是插件版本） | `node -p "require('./package.json').dshTarget"` |
-| `CHANGELOG.md` 最新小节标题 | `## 1.4.3 · 2026-11-16 · …` | `grep -n "^## " CHANGELOG.md`（取第一条） |
-| `release-notes.md` 首行 | `# 1.4.3` | `head -1 release-notes.md` |
+| `CHANGELOG.md` 最新小节标题 | `## 1.4.4 · 2026-11-16 · …` | `grep -n "^## " CHANGELOG.md`（取第一条） |
+| `release-notes.md` 首行 | `# 1.4.4` | `head -1 release-notes.md` |
 
 外加两处"会过期"的数字：`docs/zh/README.md` 的「一眼版本」和 `docs/zh/05-known-limits.md` 的「截至 x.y.z」。
 

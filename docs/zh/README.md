@@ -19,6 +19,6 @@
 
 - 补丁表 **88 条**，最大 id 105
 - 当前适配 **DSH 0.2.2-rc.3**（同时也吃 0.2.1-rc.3 / 0.2.2-rc.1 / rc.2）；rc.5 已做过预检与链式干跑，未装机实跑
-- 当前插件版 **1.4.3**（CI 出包修复 + 判定收窄 + 配置收口），测试 **227 例**
+- 当前插件版 **1.4.4**（CI 出包修复 + 判定收窄 + 配置收口），测试 **233 例**
 - 判据命令：`node scripts/assert-patches.mjs` / `node scripts/assert-soul-guard.mjs` / `node --test test/*.test.mjs` / `node scripts/preflight-upgrade.mjs --host <树>`
 - 本机运维脚本（不在本仓库，随工作区走）：`check-paths.mjs` / `check-pruner.mjs`

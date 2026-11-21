@@ -6,3 +6,11 @@ lib/default-prompt-inject.md
 频道推广手册/
 # docs/notice 下是第三方微信截图（零引用），只留在仓库，不进发布包。
 docs/notice/
+# 本机预检基线不进发布包：它是「我这台机器健康时」的贴点记录，跟着包发出去，
+# 别人的预检差分就变成拿我的基线比他的机器（台账第 4 条）。
+# ⚠️ 这条在 npm 上其实拦不住 —— "scripts" 是 files 白名单里的目录，
+# 实测（npm 11.19.1）白名单目录内的文件不看这里的 .npmignore，真正生效的是
+# package.json files 里的 "!scripts/preflight-baseline.json"。留着这条是为了
+# 万一以后 scripts 从 files 白名单里去掉时仍有兜底；zip 走 git archive，两条都不管，
+# 由 release.yml 的 Publish / assert zip content 兜。
+scripts/preflight-baseline.json

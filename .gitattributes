@@ -19,3 +19,5 @@
 *.tgz binary
 *.asar binary
 *.node binary
+# 本机预检基线不进任何分发物（GitHub 的 main.tar.gz 也走 export-ignore）
+scripts/preflight-baseline.json export-ignore
