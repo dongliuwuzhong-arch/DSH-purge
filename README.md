@@ -1,18 +1,18 @@
 # dsh-purge
 
-**Prompt and host-patch plugin for DeepSeek Harness · 1.5.3**
+**Prompt and host-patch plugin for DeepSeek Harness · 1.5.4**
 
-Derived from [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 1.1.71 (MIT) and independently maintained since: the host baseline is pinned at DSH **0.2.2-rc.5**, and the patch table, the judgments and these docs serve this tree only — no external release cadence is followed.
+Fork point `YuJunZhiXue/dsh-purge` 1.1.71 (MIT, repository no longer reachable); everything after it is maintained here
 
 > 📚 **Chinese docs: [docs/zh/README.md](docs/zh/README.md)** — three books: handbook (do this), deep-dive (why), history (how it was verified back then, all numbers expired).
 
 | Item | Value |
 | --- | --- |
-| Plugin version | 1.5.3 |
+| Plugin version | 1.5.4 |
 | Host baseline (pinned) | DSH 0.2.2-rc.5 |
 | Patch table | 77 patches, max id 105 (plus 4 archived entries outside the count) |
 | Tests | 356 tests |
-| Source (fork point) | [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 1.1.71 — credited for origin only, not a reference point |
+| Fork point (repository no longer reachable) | `YuJunZhiXue/dsh-purge` 1.1.71 — credited for origin only |
 | This repository | [dongliuwuzhong-arch/DSH-purge](https://github.com/dongliuwuzhong-arch/DSH-purge) |
 
 ## What it does
@@ -43,7 +43,7 @@ Derived from [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 1
 | --- | --- | --- |
 | Patch table | `node scripts/assert-patches.mjs` | `✓ 补丁表自检通过` |
 | Persona layer | `node scripts/assert-soul-guard.mjs` | `soul-guard ok`, digest matches `soul-guard.lock` |
-| Versions | `node scripts/assert-versions.mjs` | `✓ 四处一致：1.5.3` |
+| Versions | `node scripts/assert-versions.mjs` | `✓ 四处一致：1.5.4` |
 | Docs | `node scripts/assert-docs.mjs` | six numeric classes plus the class-7 command smoke. All green → **last** line `七类全绿。` (all three smoke commands really ran); if any smoke step was skipped the last line says `六类全绿；第 7 类命令冒烟跳过 N 条（未核）` — skipped is not passed. The second-to-last line tells you which smoke commands ran |
 
 These are what make a wrong doc go red: banned words, drifted line references, patch counts, test counts, five version sites. Boundaries of each gate: [deep-dive/03](docs/zh/deep-dive/03-工程与发版.md).
@@ -121,8 +121,6 @@ Plugin source lives at `$DSH_HOME/plugins/dsh-purge`; a profile's `node_modules/
 
 ## Source and license
 
-- Source (fork point): [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) **1.1.71**
-- License: MIT, see [LICENSE](LICENSE)
-- Copyright for the original work remains with its authors and contributors; this repository is responsible only for its own changes
-
-**Everything after the fork point is a local decision**: the host baseline, the patch table, the judgments and the doc split answer to no external release.
+- **Fork point**: `YuJunZhiXue/dsh-purge` **1.1.71** (MIT). That repository is **no longer reachable**; the fork point is recorded here for provenance.
+- **License**: MIT — see [LICENSE](LICENSE). Original copyright stays with the authors and contributors of the work above; this repository is responsible only for its own changes.
+- **This repository is now the source of truth.** As of 1.5.4 there is no external release to follow: the host baseline, the patch table, the judgments and the doc split are all decided here, and the docs describe exactly this tree.

@@ -1,12 +1,9 @@
-# 1.5.3
+# 1.5.4
 
-终审 A（文字）/ 终审 B（GitHub 代码）都过；文字侧 5 个 A 级全修，并补上 assert-docs 的三个盲区。补丁表 77 条；测试 356 例。
+fork 点 `YuJunZhiXue/dsh-purge` 1.1.71 的仓库已不可访问：MIT 义务照旧（保留原版权与许可全文），但从这一版起**本仓库就是唯一来源**。
 
-- `install-offline --verify` 文档回改成真实行为：链接 / 实体副本都认，副本打印 `实体副本 / copy` 并 exit 0。
-- 版本残留 14 处 1.5.0 → 统一到 1.5.3（两份 README、handbook 01/02/99）。
-- 安装章第一条命令的 `%USERPROFILE%` 换成 PowerShell 写法（照抄不再崩）。
-- `--dry-run` 判据由"五行"改为实测 6 行（含 `would update package.json`）。
-- 02 现状快照按 1.5.2 实测重写（应用戳、副本版本、唯一红项）。
-- assert-docs：版本锚扩到四处、补丁/用例数认中英文句式；history 两处本机路径脱敏。
+- 所有"源码来源 / fork point"写法统一成"fork 点 + 原仓库已不可访问 + 本仓库即唯一来源"（17 篇文档 + 两份 README + LICENSE 补派生声明）。
+- 仓库 About 与话题更新：0.2.2-rc.5 / 77 条补丁 / 356 条测试 / 7 个话题。
+- `package.json` 描述改成"fork 点 + 此后唯一来源"的写法。
 
 补丁表 77 条；测试 356 例。

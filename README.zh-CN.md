@@ -1,18 +1,17 @@
 # dsh-purge（破甲）
 
-**DeepSeek Harness 提示词与宿主补丁插件 · 1.5.3**
+**DeepSeek Harness 提示词与宿主补丁插件 · 1.5.4**
 
-> 破甲自 dsh-purge 1.1.71 分出后独立维护：宿主定版在 0.2.2-rc.5，补丁表、判据与文档只服务这一棵树，不再跟随任何外部发行节奏。（出处：YuJunZhiXue/dsh-purge 1.1.71，MIT）
-
+> 破甲自 dsh-purge 1.1.71 分出后独立维护：宿主定版在 0.2.2-rc.5，补丁表、判据与文档只服务这一棵树；**原仓库已不可访问，本仓库即唯一来源**（fork 点 1.1.71，MIT）；**原仓库已不可访问，本仓库即唯一来源**（fork 点 1.1.71，MIT）
 > 📚 **中文文档总导航：[docs/zh/README.md](docs/zh/README.md)** —— 三册：运维手册（照着做）/ 原理（为什么）/ 存档（当时怎么查的）。
 
 | 项 | 值 |
 | --- | --- |
-| 当前插件版 | 1.5.3 |
+| 当前插件版 | 1.5.4 |
 | 宿主基线（定版） | DSH 0.2.2-rc.5 |
 | 补丁表 | 77 条，最大 id 105（另有 4 条在存档区，不参与计数） |
 | 测试 | 356 例 |
-| 源码来源 | [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 1.1.71（fork 点，只管版权与出身） |
+| fork 点（仓库已不可访问） | `YuJunZhiXue/dsh-purge` 1.1.71 — 只记出身 |
 | 本仓库 | [dongliuwuzhong-arch/DSH-purge](https://github.com/dongliuwuzhong-arch/DSH-purge) |
 
 ## 它能做什么
@@ -45,7 +44,7 @@
 | --- | --- | --- |
 | 补丁表 | `node scripts/assert-patches.mjs` | `✓ 补丁表自检通过` |
 | 灵魂层 | `node scripts/assert-soul-guard.mjs` | `soul-guard ok`，digest 与 `soul-guard.lock` 一致 |
-| 版本 | `node scripts/assert-versions.mjs` | `✓ 四处一致：1.5.3` |
+| 版本 | `node scripts/assert-versions.mjs` | `✓ 四处一致：1.5.4` |
 | 文档 | `node scripts/assert-docs.mjs` | 六类数字 + 第 7 类命令冒烟。**末行**是 `七类全绿。`（三条冒烟都真跑过）；有跳过时末行写 `六类全绿；第 7 类命令冒烟跳过 N 条（未核）`——跳过不算通过。倒数第二行说跑到哪几条 |
 
 这四道门是「文档写错了也会红」的机制：禁用词、行号漂移、补丁条数、用例数、版本五处，全靠它们守。各自的边界见 [deep-dive/03-工程与发版.md](docs/zh/deep-dive/03-工程与发版.md)。
@@ -78,7 +77,7 @@ node scripts/install-offline.mjs --verify --profile desktop --dsh-home "$HOME/.d
 也可以直接装压缩包：
 
 ```bash
-node scripts/install-offline.mjs --zip dsh-purge-1.5.3.zip --profile desktop --dsh-home "$HOME/.dsh"
+node scripts/install-offline.mjs --zip dsh-purge-1.5.4.zip --profile desktop --dsh-home "$HOME/.dsh"
 ```
 
 ### ② 官方 CLI（需要网络）
@@ -142,8 +141,6 @@ New-Item -ItemType Junction -Path "$env:USERPROFILE\.dsh\profiles\desktop\node_m
 
 ## 来源与许可
 
-- 源码来源（fork 点）：[YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) **1.1.71**
-- 许可：MIT，见 [LICENSE](LICENSE)
-- 原作与贡献者的版权归其各自所有；本仓库只对自己这部分改动负责
-
-**fork 点之后的一切都是本地决定**：宿主基线、补丁表增删、判据、文档分册，都不需要与任何外部发行对齐。
+- **fork 点**：`YuJunZhiXue/dsh-purge` **1.1.71**（MIT）。**那个仓库已经不可访问**，这条只记出身、不再当参照系。
+- **许可**：MIT，见 [LICENSE](LICENSE)。原作品的版权归原作者与贡献者；本仓库只对自己改动的部分负责。
+- **本仓库自 1.5.4 起就是唯一来源**：没有需要跟随的外部发行，宿主基线、补丁表增删、判据、文档分册全在这里决定，文档写的就是这棵树。
